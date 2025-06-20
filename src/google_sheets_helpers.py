@@ -149,28 +149,22 @@ def append_df_to_sheet(service, spreadsheet_id, sheet_name, df):
         logging.error(f"🔴 Error appending to Google Sheet: {e}")
         return False
 
-def update_sent_status(service, spreadsheet_id, sheet_name, prospect_email, column_name):
+def update_sent_status(service, spreadsheet_id, sheet_name, prospect_name, column_name):
     """
-    Finds a prospect by email and updates the status of a specific column (e.g., 'Initial Email Sent').
+    Finds a prospect by their unique name and updates the status of a specific column.
     """
     worksheet = get_worksheet(service, spreadsheet_id, sheet_name)
     if not worksheet:
         return False
     try:
-        # Find the cell with the prospect's email
-        all_emails = worksheet.col_values(3) # Assuming 'Email' is column C
+        # Find the cell with the prospect's name in the second column ('Name')
+        cell = worksheet.find(prospect_name, in_column=2)
         
-        found_row = -1
-        for i, cell_value in enumerate(all_emails):
-            # Check if the desired email is a substring of the cell content
-            # This handles cases like '["email@a.com"]' vs 'email@a.com'
-            if prospect_email in cell_value:
-                found_row = i + 1 # i is 0-indexed, gspread is 1-indexed
-                break
-        
-        if found_row == -1:
-            logging.warning(f"Could not find prospect with email {prospect_email} to update status.")
+        if not cell:
+            logging.warning(f"Could not find prospect with name '{prospect_name}' to update status.")
             return False
+
+        found_row = cell.row
 
         # Find the column index for the status update
         header_row = worksheet.row_values(1)
@@ -180,20 +174,20 @@ def update_sent_status(service, spreadsheet_id, sheet_name, prospect_email, colu
         
         col_index = header_row.index(column_name) + 1
         
-        # Update the cell in that row with today's date
-        today_date = pd.Timestamp.now().strftime('%Y-%m-%d')
-        worksheet.update_cell(found_row, col_index, today_date)
+        # Update the cell in that row with today's date and time
+        timestamp = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
+        worksheet.update_cell(found_row, col_index, timestamp)
 
         # Also update the 'last_contact_date'
         if 'last_contact_date' in header_row:
             last_contact_col_index = header_row.index('last_contact_date') + 1
-            worksheet.update_cell(found_row, last_contact_col_index, today_date)
+            worksheet.update_cell(found_row, last_contact_col_index, timestamp)
 
-        logging.info(f"✅ Updated '{column_name}' for {prospect_email}.")
+        logging.info(f"✅ Updated '{column_name}' for {prospect_name}.")
         return True
 
     except Exception as e:
-        logging.error(f"🔴 Error updating sent status for {prospect_email}: {e}")
+        logging.error(f"🔴 Error updating sent status for {prospect_name}: {e}")
         return False
 
 def update_follow_up_status(service, spreadsheet_id, sheet_name, prospect_name, stage):
@@ -207,7 +201,8 @@ def update_follow_up_status(service, spreadsheet_id, sheet_name, prospect_name, 
     column_to_update = f'follow_up_{stage}_sent_date'
     
     try:
-        cell = worksheet.find(prospect_name, in_column=1) # Assuming 'Name' is column A
+        # Find the cell with the prospect's name in the second column ('Name')
+        cell = worksheet.find(prospect_name, in_column=2) 
         if not cell:
             logging.warning(f"Could not find prospect '{prospect_name}' to update follow-up status.")
             return False
@@ -218,13 +213,13 @@ def update_follow_up_status(service, spreadsheet_id, sheet_name, prospect_name, 
             return False
             
         col_index = header_row.index(column_to_update) + 1
-        today_date = pd.Timestamp.now().strftime('%Y-%m-%d')
-        worksheet.update_cell(cell.row, col_index, today_date)
+        timestamp = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
+        worksheet.update_cell(cell.row, col_index, timestamp)
 
         # Also update the 'last_contact_date'
         if 'last_contact_date' in header_row:
             last_contact_col_index = header_row.index('last_contact_date') + 1
-            worksheet.update_cell(cell.row, last_contact_col_index, today_date)
+            worksheet.update_cell(cell.row, last_contact_col_index, timestamp)
 
         logging.info(f"✅ Updated follow-up stage {stage} for {prospect_name}.")
         return True
@@ -232,38 +227,48 @@ def update_follow_up_status(service, spreadsheet_id, sheet_name, prospect_name, 
         logging.error(f"🔴 Error updating follow-up status for {prospect_name}: {e}")
         return False
 
-def update_bounced_status_bulk(service, spreadsheet_id, sheet_name, bounced_emails):
-    """Finds multiple prospects by their email and marks them as bounced in a single batch."""
-    if not bounced_emails:
+def update_bounced_status_bulk(service, spreadsheet_id, sheet_name, bounced_info: dict, prospects_df):
+    """
+    Finds prospects by their email within the provided DataFrame and marks them as bounced with a specific reason.
+    """
+    if not bounced_info or prospects_df.empty:
         return True
+        
     worksheet = get_worksheet(service, spreadsheet_id, sheet_name)
     if not worksheet:
         return False
+
     try:
-        all_data = worksheet.get_all_records()
-        df = pd.DataFrame(all_data)
-
-        if df.empty:
-            logging.warning("Sheet is empty. No bounce statuses to update.")
-            return True
-            
         cells_to_update = []
-        bounced_emails_set = set(bounced_emails)
-        
-        for index, row in df.iterrows():
-            email_in_sheet = row.get('Email')
-            if email_in_sheet and email_in_sheet in bounced_emails_set:
-                row_number = index + 2  # +1 for header, +1 for 0-indexing
-                
-                status_col_index = df.columns.get_loc('email_status') + 1
-                reason_col_index = df.columns.get_loc('Reason for bounce') + 1
+        bounced_emails_set = set(bounced_info.keys())
 
-                cells_to_update.append(gspread.Cell(row=row_number, col=status_col_index, value='Bounced'))
-                cells_to_update.append(gspread.Cell(row=row_number, col=reason_col_index, value='Delivery failed'))
-                
-                bounced_emails_set.remove(email_in_sheet) # Optimize by removing found emails
-                if not bounced_emails_set:
-                    break
+        # Ensure we have the necessary columns before iterating
+        if 'email_status' not in prospects_df.columns or 'termination_reason' not in prospects_df.columns or 'verified_emails' not in prospects_df.columns:
+            logging.error("Sheet is missing required columns: 'email_status', 'termination_reason', or 'verified_emails'.")
+            return False
+
+        # Get column letters/indices once
+        status_col_index = prospects_df.columns.get_loc('email_status') + 1
+        reason_col_index = prospects_df.columns.get_loc('termination_reason') + 1
+
+        for index, row in prospects_df.iterrows():
+            email_cell = row.get('verified_emails', '')
+            if not email_cell:
+                continue
+            
+            # The email can be a string '["email@a.com"]' or just 'email@a.com'
+            # We just need to check if the bounced email is in that string.
+            for bounced_email in bounced_emails_set.copy(): # Iterate over a copy
+                if bounced_email in email_cell:
+                    reason = bounced_info[bounced_email] # Get the specific reason
+                    row_number = index + 2  # +1 for header, +1 for 0-indexing
+                    cells_to_update.append(gspread.Cell(row=row_number, col=status_col_index, value='Bounced'))
+                    cells_to_update.append(gspread.Cell(row=row_number, col=reason_col_index, value=reason))
+                    bounced_emails_set.remove(bounced_email) # Remove from set to avoid re-processing
+                    break # Move to the next row in the dataframe
+
+            if not bounced_emails_set:
+                break
 
         if cells_to_update:
             worksheet.update_cells(cells_to_update, value_input_option='USER_ENTERED')
@@ -272,7 +277,7 @@ def update_bounced_status_bulk(service, spreadsheet_id, sheet_name, bounced_emai
             logging.info("No matching emails found in the sheet to mark as bounced.")
         return True
 
-    except gspread.exceptions.APIError as e:
+    except Exception as e:
         logging.error(f"🔴 Error in bulk update of bounced emails: {e}")
         return False
 

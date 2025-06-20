@@ -103,8 +103,8 @@ def run_follow_up_campaign(daily_limit: int):
             solutions = json.loads(prospect_dict.get('proposed_solutions', '[]'))
             primary_solution = solutions[0] if solutions else ""
             
-            # This is the crucial check. Only proceed if the original pitch was about content/social media.
-            if "Content" not in primary_solution and "Social Media" not in primary_solution:
+            # This is the crucial check. Only proceed if the original pitch was about content/social media/brand.
+            if "Content" not in primary_solution and "Social Media" not in primary_solution and "Brand" not in primary_solution:
                 logging.warning(f"Skipping follow-up for {prospect_dict['name']} due to outdated strategy ('{primary_solution}').")
                 continue
         except (json.JSONDecodeError, IndexError):

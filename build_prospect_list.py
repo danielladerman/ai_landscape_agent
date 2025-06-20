@@ -133,8 +133,7 @@ def build_prospect_list(query: str, max_leads: int = 100, max_workers: int = 10)
             try:
                 result = future.result()
                 if result:
-                    # Add final tracking data right here with the correct column name
-                    result['sent_date'] = pd.Timestamp.now().strftime('%Y-%m-%d')
+                    # The 'sent_date' will be added by the sending script, not here.
                     final_prospects_data.append(result)
             except Exception as e:
                 logging.error(f"Error in main analysis pipeline: {e}")

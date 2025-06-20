@@ -71,12 +71,12 @@ def run_daily_sending(max_emails: int):
         )
 
         if success:
-            # Update the sheet immediately to prevent double-sends
+            # Update the sheet immediately by prospect name to avoid parsing errors
             update_sent_status(
                 service, 
                 settings.SPREADSHEET_ID, 
                 settings.GOOGLE_SHEET_NAME, 
-                prospect_email=recipient, 
+                prospect_name=name, # Use name for lookup
                 column_name='sent_date'
             )
             sent_count += 1

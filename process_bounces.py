@@ -65,37 +65,52 @@ def find_bounced_emails(service):
 
 def get_bounced_recipient(service, msg_id):
     """
-    Parses a single email to find the original recipient who bounced.
+    Parses a single email to find the original recipient who bounced and a simple reason.
     """
     try:
         msg = service.users().messages().get(userId='me', id=msg_id, format='full').execute()
         payload = msg.get('payload', {})
+        snippet = msg.get('snippet', '').lower()
         
-        # The original recipient is often in the headers or the body snippet
-        snippet = msg.get('snippet', '')
-        
-        # A common pattern is "The following recipient(s) failed: user@example.com"
-        # Or in the headers as "Final-Recipient: rfc822; user@example.com"
+        # --- Find Recipient ---
         email_regex = r'<([\w\.-]+@[\w\.-]+)>|[\w\.-]+@[\w\.-]+'
-        
+        recipient = None
+
         # Search headers first for reliability
         headers = payload.get('headers', [])
         for header in headers:
             if header['name'].lower() == 'final-recipient':
                 match = re.search(email_regex, header['value'])
                 if match:
-                    return match.group(0)
-
+                    recipient = match.group(1) if match.group(1) else match.group(0)
+                    break
+        
         # If not in headers, try the snippet
-        match = re.search(email_regex, snippet)
-        if match:
-            # The regex might match with angle brackets, so we check both capturing groups
-            return match.group(1) if match.group(1) else match.group(0)
+        if not recipient:
+            match = re.search(email_regex, snippet)
+            if match:
+                recipient = match.group(1) if match.group(1) else match.group(0)
+
+        if not recipient:
+            return None, None
+
+        # --- Find Reason from Snippet ---
+        if "does not exist" in snippet or "address couldn't be found" in snippet or "no such user" in snippet:
+            reason = "Address not found"
+        elif "mailbox full" in snippet or "quota exceeded" in snippet:
+            reason = "Mailbox full"
+        elif "blocked by" in snippet or "rejected" in snippet:
+            reason = "Blocked by server"
+        elif "unable to receive" in snippet:
+            reason = "Recipient unable to receive"
+        else:
+            reason = "Delivery failed"
             
-        return None
+        return recipient, reason
+
     except Exception as e:
         logging.error(f"Error parsing email ID {msg_id}: {e}")
-        return None
+        return None, None
 
 def process_bounces():
     """
@@ -116,37 +131,41 @@ def process_bounces():
         
     logging.info(f"Found {len(bounced_messages)} potential bounce notifications.")
     
-    bounced_recipients = []
-    clean_email_regex = r'[\w\.-]+@[\w\.-]+'
+    bounced_recipients_info = {} # Use a dict to store {email: reason}
+    clean_email_regex = r'[\w\.\-]{1,64}@[\w\.\-]+\.[a-zA-Z]{2,}'
 
     for message in bounced_messages:
-        raw_recipient = get_bounced_recipient(service, message['id'])
+        raw_recipient, reason = get_bounced_recipient(service, message['id'])
         if raw_recipient:
             # Clean the extracted string to get only the valid email part
             match = re.search(clean_email_regex, raw_recipient)
             if match:
                 clean_recipient = match.group(0)
-                logging.info(f"Identified bounced recipient: {clean_recipient} (from raw: {raw_recipient})")
-                bounced_recipients.append(clean_recipient)
+                # Store the email and reason. Overwrites duplicates, which is fine.
+                bounced_recipients_info[clean_recipient] = reason
+                logging.info(f"Identified bounced recipient: {clean_recipient}, Reason: {reason}")
             else:
                 logging.warning(f"Could not clean extracted recipient: {raw_recipient}")
         else:
             logging.warning(f"Could not extract recipient from message ID: {message['id']}")
             
-    if bounced_recipients:
-        # Remove duplicates before sending to the sheet helper
-        unique_bounced_recipients = list(set(bounced_recipients))
-        logging.info(f"Updating Google Sheet for {len(unique_bounced_recipients)} unique bounced emails...")
+    if bounced_recipients_info:
+        logging.info(f"Updating Google Sheet for {len(bounced_recipients_info)} unique bounced emails...")
         
-        # Get the sheet service and pass all required arguments
         g_service = google_sheets_helpers.get_google_sheets_service()
         if g_service:
-            google_sheets_helpers.update_bounced_status_bulk(
-                g_service,
-                settings.SPREADSHEET_ID,
-                settings.GOOGLE_SHEET_NAME,
-                unique_bounced_recipients
-            )
+            # First, get the entire sheet as a DataFrame
+            prospects_df = google_sheets_helpers.get_sheet_as_df(g_service, settings.SPREADSHEET_ID, settings.GOOGLE_SHEET_NAME)
+            if prospects_df is not None:
+                google_sheets_helpers.update_bounced_status_bulk(
+                    g_service,
+                    settings.SPREADSHEET_ID,
+                    settings.GOOGLE_SHEET_NAME,
+                    bounced_recipients_info,  # Pass the dictionary
+                    prospects_df
+                )
+            else:
+                logging.error("Could not retrieve prospects from Google Sheet to check for bounces.")
         else:
             logging.error("Could not get Google Sheets service to update bounce statuses.")
 
