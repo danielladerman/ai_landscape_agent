@@ -1,0 +1,34 @@
+# Core Libraries
+requests
+beautifulsoup4
+lxml
+pandas
+python-dotenv
+
+# LLM Integration (choose one or both)
+openai
+# anthropic
+
+# Google APIs
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+googlemaps
+
+# Email Sending (smtplib is built-in, but we might need a more robust library later)
+# For now, smtplib is sufficient. We can add libraries like sendgrid or mailgun later if needed.
+
+# For Email Verification (Phase 2)
+# hunter-client
+# zerobounce
+
+# NLP for Pain Point Identification
+nltk
+
+# Google Sheets
+gspread
+gspread-dataframe
+
+# Configuration Management
+pydantic
+pydantic-settings

@@ -1,0 +1,117 @@
+import nltk
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+import json
+import pandas as pd
+from urllib.parse import urlparse
+import openai
+from config.config import settings
+import logging
+
+# --- Mappings and Thresholds ---
+SOLUTION_MAPPING = {
+    "Poor Website Performance": "Website Conversion Optimization",
+    "Weak Online Presence": "Content Strategy & Online Presence Cultivation",
+    "Negative Customer Feedback": "Reputation Management & Feedback Systems",
+    "Untapped Paid Ad Potential": "Targeted Lead Generation Campaigns"
+}
+PERFORMANCE_THRESHOLD = 70
+ACCESSIBILITY_THRESHOLD = 85
+
+def download_nltk_data():
+    """Downloads the VADER lexicon required for sentiment analysis if not present."""
+    try:
+        nltk.data.find('sentiment/vader_lexicon.zip')
+    except nltk.downloader.DownloadError:
+        print("Downloading VADER lexicon for sentiment analysis...")
+        nltk.download('vader_lexicon')
+
+def generate_icebreaker(reviews_json, analysis_json):
+    """Uses an LLM to generate a genuine, non-technical compliment about their work."""
+    openai.api_key = settings.OPENAI_API_KEY
+    if not openai.api_key:
+        return "I was looking at your online presence" # Fallback
+
+    prompt = f"""
+    You are a marketing strategist who excels at writing genuine, one-sentence compliments for business outreach.
+    Your task is to find the most authentic and positive compliment based on the provided website analysis and Google Reviews.
+    Your goal is to set an aspirational tone. **NEVER mention negative reviews or technical website issues.**
+
+    Here is the data:
+    - Google Reviews: {reviews_json}
+    - Website Content Analysis: {analysis_json}
+
+    Instructions:
+    1. Scan the website content for the company's mission, "about us" page, or project gallery descriptions. This is your primary source.
+    2. If the website content is thin, scan the reviews for **highly positive quotes (4 stars or higher)**. A customer quote about their beautiful work is very powerful.
+    3. Based on the BEST piece of data, write a single, compelling sentence for an email icebreaker.
+    4. Your output MUST be a single JSON object with one key: "icebreaker".
+
+    Example of good output:
+    {{
+        "icebreaker": "Your gallery of patio installations is stunning; the craftsmanship is immediately obvious."
+    }}
+    {{
+        "icebreaker": "I was impressed by your company's mission to create 'unique outdoor living spaces' for your clients."
+    }}
+    """
+    try:
+        response = openai.chat.completions.create(
+            model="gpt-4-turbo-preview",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=100,
+            response_format={"type": "json_object"}
+        )
+        return json.loads(response.choices[0].message.content).get("icebreaker", "I was admiring your portfolio of work")
+    except Exception as e:
+        logging.error(f"Error generating icebreaker: {e}")
+        return "I was admiring your portfolio of work" # Fallback
+
+def analyze_pain_points(reviews_json, analysis_json, quality_scores_json):
+    """
+    Analyzes a prospect's online presence to identify the opportunity
+    to build a powerful social media presence.
+    """
+    analysis = json.loads(analysis_json) if analysis_json and analysis_json != 'null' else {}
+
+    # --- Icebreaker Generation ---
+    icebreaker = generate_icebreaker(reviews_json, analysis_json)
+
+    # --- Redefined Pain Point & Solution ---
+    # The primary "pain point" is the missed opportunity of not having a strong social brand.
+    
+    pain_point = "Opportunity to Attract High-Value Leads via Social Media"
+    solution = "Curated Instagram Content Management (Strategy, Editing & Posting)"
+
+    # --- Evidence Discovery ---
+    # The evidence should justify why Instagram is a good strategy for them.
+    social_links = analysis.get('social_links', [])
+    has_instagram = any('instagram.com' in link for link in social_links)
+
+    if has_instagram:
+        evidence = "I saw you have an Instagram presence, and I believe with a dedicated content strategy, it could become a powerful asset for attracting premium clients who appreciate high-quality work."
+    elif social_links:
+        evidence = "I noticed you're on some social platforms, and I see a tremendous opportunity to build on that by creating a professionally curated Instagram presence to showcase your beautiful work and attract more high-value customers."
+    else:
+        evidence = "Your portfolio of work is impressive, and I believe a professionally curated Instagram presence would be a powerful way to showcase it, build your brand, and attract the kind of high-value clients you're looking for."
+
+    return {
+        "icebreaker": icebreaker,
+        "identified_pains": [pain_point],
+        "proposed_solutions": [solution],
+        "evidence": [evidence]
+    }
+
+def finalize_prospects(df_prospects: pd.DataFrame):
+    """Selects and orders the most relevant columns for the final output."""
+    final_columns = [
+        'name', 'website', 'verified_emails', 'found_titles', 
+        'icebreaker', 'identified_pains', 'proposed_solutions', 'evidence',
+        'generated_subject', 'generated_body', 'sent_date'
+    ]
+    # Ensure all columns exist, adding any that are missing
+    for col in final_columns:
+        if col not in df_prospects.columns:
+            df_prospects[col] = ''
+            
+    return df_prospects[final_columns]
