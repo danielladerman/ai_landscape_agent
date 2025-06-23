@@ -227,6 +227,34 @@ def update_follow_up_status(service, spreadsheet_id, sheet_name, prospect_name, 
         logging.error(f"🔴 Error updating follow-up status for {prospect_name}: {e}")
         return False
 
+def update_prospect_status(service, spreadsheet_id, sheet_name, prospect_name, column_name, status_value):
+    """
+    Finds a prospect by their unique name and updates a specific column with a given value.
+    """
+    worksheet = get_worksheet(service, spreadsheet_id, sheet_name)
+    if not worksheet:
+        return False
+    try:
+        # Find the cell with the prospect's name
+        # Assuming 'name' is in the second column (B)
+        cell = worksheet.find(prospect_name, in_column=2)
+        if not cell:
+            logging.warning(f"Could not find prospect '{prospect_name}' to update status.")
+            return False
+
+        header_row = worksheet.row_values(1)
+        if column_name not in header_row:
+            logging.error(f"Column '{column_name}' not found in the sheet.")
+            return False
+
+        col_index = header_row.index(column_name) + 1
+        worksheet.update_cell(cell.row, col_index, status_value)
+        logging.info(f"✅ Updated '{column_name}' to '{status_value}' for {prospect_name}.")
+        return True
+    except Exception as e:
+        logging.error(f"🔴 Error updating prospect status for {prospect_name}: {e}")
+        return False
+
 def update_bounced_status_bulk(service, spreadsheet_id, sheet_name, bounced_info: dict, prospects_df):
     """
     Finds prospects by their email within the provided DataFrame and marks them as bounced with a specific reason.

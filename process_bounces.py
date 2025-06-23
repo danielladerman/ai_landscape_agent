@@ -54,8 +54,8 @@ def find_bounced_emails(service):
     Searches for bounced emails and returns a list of message IDs.
     """
     try:
-        # Search for standard bounce-back subjects from Mailer-Daemon
-        query = 'subject:("Delivery Status Notification (Failure)" OR "Undelivered Mail Returned to Sender")'
+        # Search for standard bounce-back subjects from Mailer-Daemon and other common patterns
+        query = 'subject:("Delivery Status Notification (Failure)" OR "Undelivered Mail Returned to Sender" OR "Undeliverable") OR from:mailer-daemon@google.com'
         result = service.users().messages().list(userId='me', q=query).execute()
         messages = result.get('messages', [])
         return messages

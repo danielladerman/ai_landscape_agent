@@ -104,8 +104,25 @@ def run_follow_up_campaign(daily_limit: int):
             primary_solution = solutions[0] if solutions else ""
             
             # This is the crucial check. Only proceed if the original pitch was about content/social media/brand.
-            if "Content" not in primary_solution and "Social Media" not in primary_solution and "Brand" not in primary_solution:
-                logging.warning(f"Skipping follow-up for {prospect_dict['name']} due to outdated strategy ('{primary_solution}').")
+            if "Content" not in primary_solution and "Social Media" not in primary_solution and "Brand" not in primary_solution and "Targeted Lead Generation" not in primary_solution:
+                logging.warning(f"Skipping follow-up for {prospect_dict['name']} due to outdated strategy ('{primary_solution}'). Marking as bounced.")
+                # Mark as bounced in the sheet
+                google_sheets_helpers.update_prospect_status(
+                    service,
+                    settings.SPREADSHEET_ID,
+                    settings.GOOGLE_SHEET_NAME,
+                    prospect_name=prospect_dict['name'],
+                    column_name='email_status',
+                    status_value='Bounced'
+                )
+                google_sheets_helpers.update_prospect_status(
+                    service,
+                    settings.SPREADSHEET_ID,
+                    settings.GOOGLE_SHEET_NAME,
+                    prospect_name=prospect_dict['name'],
+                    column_name='termination_reason',
+                    status_value='Outdated Strategy'
+                )
                 continue
         except (json.JSONDecodeError, IndexError):
             logging.warning(f"Skipping follow-up for {prospect_dict['name']} due to invalid 'proposed_solutions' format.")

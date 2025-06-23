@@ -111,8 +111,8 @@ def generate_follow_up_email(prospect_data: dict, stage: int):
     body = ""
 
     # Define the content for the Instagram-focused strategy
-    competitor_mention_stage1 = "To see what's possible, look at how competitors like **FOXTERRA Design** are leveraging social media to get millions of views on their projects ([see their Instagram here](https://www.instagram.com/foxterradesign)). This is the level of brand presence we aspire to build for our clients."
-    competitor_mention_stage2 = "As we saw with **FOXTERRA Design**, a strong social media presence can be a game-changer."
+    competitor_mention_stage1 = "To see what's possible, look at how competitors like FOXTERRA Design are leveraging social media to get millions of views on their projects (see their Instagram here - https://www.instagram.com/foxterradesign). This is the level of brand presence we aspire to build for our clients."
+    competitor_mention_stage2 = "As we saw with FOXTERRA Design, a strong social media presence can be a game-changer."
     doc_description = "To give you some actionable advice, I've attached a brief guide on how a targeted content strategy can create a predictable stream of inbound leads for your business. It's a quick read with some of the key principles we use."
 
     if stage == 1:
