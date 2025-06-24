@@ -157,8 +157,10 @@ https://www.lacadconsulting.com
 <p><a href="https://www.focusgts.com">Focus Global Talent Services</a> | <a href="https://www.instagram.com/focusglobaltalent/">IG</a></p>
 <p><a href="https://www.bloombeaconhr.com">Bloom & Beacon</a> | <a href="https://www.instagram.com/bloombeaconhr/">IG</a></p>
 <br>
+<p>If turning your impressive work into a client-attracting social media brand is something you're considering, I'd be happy to share some initial thoughts. Let me know if you're open to a brief 15-minute call next week.</p>
+<br>
 <p>--</p>
-<p>Would a brief 15-minute call be possible sometime next week?</p>
+<p>Respectfully,</p>
 <p><b>Daniel Laderman</b><br>
 Brand & Content Strategist<br>
 Lacad Consulting<br>
