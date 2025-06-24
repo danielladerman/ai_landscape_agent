@@ -66,8 +66,8 @@ def generate_personalized_email(business_name, titles, icebreaker, pains, soluti
     **Signature:**
     Daniel Laderman
     {persona_title}
-    LAC Advertisement
-    https://www.lacadvertisement.com
+    Lacad Consulting
+    https://www.lacadconsulting.com
 
     **Output Format:** Provide the output as a JSON object with two keys: "subject" and "body".
     """
@@ -131,33 +131,47 @@ Are you free for a quick chat next week to discuss how a similar strategy could 
 
 Best regards,
 Daniel Laderman
-Digital Strategist | LAC Advertisement
-https://www.lacadvertisement.com
+Brand & Content Strategist | Lacad Consulting
+https://www.lacadconsulting.com
 """
 
     elif stage == 2:
-        subject = f"A few thoughts for {business_name}"
-        body = f"""Hi,
-
-Just wanted to quickly touch base one more time.
-
-{competitor_mention_stage2}
-
-The resource I shared previously outlines a clear path to achieving that. I am confident we can help you implement a similar strategy effectively.
-
-Would a brief 15-minute call be possible sometime next week?
-
-Best regards,
-Daniel Laderman
-Digital Strategist | LAC Advertisement
-https://www.lacadvertisement.com
+        subject = f"Some thoughts for {business_name}"
+        body = f"""<html>
+<head></head>
+<body>
+<p>Hey {business_name},</p>
+<p>Just wanted to quickly touch base one more time.. Here are some testimonials and references from companies we've worked with—feel free to check them out. Let me know if you have any questions.</p>
+<br>
+<p><b>Video Testimonials</b></p>
+<p><a href="https://vimeo.com/681122826">Josh Webber - Webber Films</a></p>
+<p><a href="https://vimeo.com/603391977">Shye Lee and Aishah Mo</a></p>
+<p><a href="https://vimeo.com/603391593">Johnny Stephene, Dribble2Much - HandleLife</a></p>
+<p><a href="https://vimeo.com/603391669">Josh Perelin</a></p>
+<br>
+<p><b>References</b></p>
+<p><a href="https://pso-rite.com">Pso-Rite</a> | <a href="https://www.instagram.com/pso_rite/">IG</a></p>
+<p><a href="https://www.handlelife.com">HandleLife</a> | <a href="https://www.instagram.com/handlelife">IG</a></p>
+<p><a href="https://unlimitter.com">Unlimitter</a> | <a href="https://www.tiktok.com/@unlimitter">TikTok</a> | <a href="https://www.instagram.com/getunlimitter/">IG</a></p>
+<p><a href="https://airelleskin.com">Airelle Skincare</a> | <a href="https://www.instagram.com/airelleskin/">IG</a></p>
+<p><a href="https://www.focusgts.com">Focus Global Talent Services</a> | <a href="https://www.instagram.com/focusglobaltalent/">IG</a></p>
+<p><a href="https://www.bloombeaconhr.com">Bloom & Beacon</a> | <a href="https://www.instagram.com/bloombeaconhr/">IG</a></p>
+<br>
+<p>--</p>
+<p>Would a brief 15-minute call be possible sometime next week?</p>
+<p><b>Daniel Laderman</b><br>
+Brand & Content Strategist<br>
+Lacad Consulting<br>
+<a href="https://www.lacadconsulting.com">lacadconsulting.com</a></p>
+</body>
+</html>
 """
 
     elif stage == 3:
         subject = "One last thing..."
         body = f"""Hi,
 
-I understand that now might not be the best time to explore this. I won't reach out again.
+I understand that now might not be the best time to explore social media branding and marketing. I won't reach out again.
 
 If you ever find yourself looking for ways to grow your client base, please don't hesitate to get in touch. We're always here to help.
 
@@ -165,8 +179,8 @@ Wishing you all the best with your business.
 
 Best regards,
 Daniel Laderman
-Digital Strategist | LAC Advertisement
-https://www.lacadvertisement.com
+Brand & Content Strategist | Lacad Consulting
+https://www.lacadconsulting.com
 """
 
     else:
