@@ -7,16 +7,6 @@ import openai
 from config.config import settings
 import logging
 
-# --- Mappings and Thresholds ---
-SOLUTION_MAPPING = {
-    "Poor Website Performance": "Website Conversion Optimization",
-    "Weak Online Presence": "Content Strategy & Online Presence Cultivation",
-    "Negative Customer Feedback": "Reputation Management & Feedback Systems",
-    "Untapped Paid Ad Potential": "Targeted Lead Generation Campaigns"
-}
-PERFORMANCE_THRESHOLD = 70
-ACCESSIBILITY_THRESHOLD = 85
-
 def download_nltk_data():
     """Downloads the VADER lexicon required for sentiment analysis if not present."""
     try:
@@ -67,7 +57,7 @@ def generate_icebreaker(reviews_json, analysis_json):
         logging.error(f"Error generating icebreaker: {e}")
         return "I was admiring your portfolio of work" # Fallback
 
-def analyze_pain_points(reviews_json, analysis_json, quality_scores_json):
+def analyze_pain_points(reviews_json, analysis_json):
     """
     Analyzes a prospect's online presence to identify the opportunity
     to build a powerful social media presence.

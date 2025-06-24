@@ -18,31 +18,6 @@ SOCIAL_MEDIA_DOMAINS = [
     "facebook.com", "instagram.com", "twitter.com", "linkedin.com", "youtube.com"
 ]
 
-def get_website_quality_scores(url: str, strategy: str = "desktop"):
-    """Fetches PageSpeed Insights scores for a given URL."""
-    # Note: This requires a Google API key with PageSpeed Insights API enabled.
-    # The key is often the same as the Maps API key but needs the specific API enabled in the cloud console.
-    api_key = settings.GOOGLE_MAPS_API_KEY 
-    pagespeed_url = f"https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url={url}&key={api_key}&strategy={strategy}&category=PERFORMANCE&category=ACCESSIBILITY&category=SEO"
-    
-    try:
-        response = requests.get(pagespeed_url, timeout=60)
-        response.raise_for_status()
-        
-        results = response.json()
-        lighthouse = results.get('lighthouseResult', {})
-        
-        scores = {
-            "performance": int(lighthouse.get('categories', {}).get('performance', {}).get('score', 0) * 100),
-            "accessibility": int(lighthouse.get('categories', {}).get('accessibility', {}).get('score', 0) * 100),
-            "seo": int(lighthouse.get('categories', {}).get('seo', {}).get('score', 0) * 100),
-        }
-        print(f"  > Quality Scores: Performance={scores['performance']}, Accessibility={scores['accessibility']}, SEO={scores['seo']}")
-        return scores
-
-    except requests.exceptions.RequestException as e:
-        print(f"  > Error fetching PageSpeed scores for {url}: {e}")
-        return {}
 
 def analyze_website_content(base_url: str):
     """

@@ -3,6 +3,7 @@ import concurrent.futures
 import logging
 import argparse
 import json
+import time
 
 from config.config import settings
 from src.lead_generation import google_maps_finder
@@ -43,14 +44,11 @@ def analyze_prospect(business: dict) -> dict:
         # 2. Analyze Website Content and store
         content_analysis = content_analyzer.analyze_website_content(website)
         business['website_analysis'] = json.dumps(content_analysis)
-        quality_scores = content_analyzer.get_website_quality_scores(website)
-        business['website_quality_scores'] = json.dumps(quality_scores)
-
+        
         # 3. Identify Pain Points based on all data
         pain_results = pain_point_detector.analyze_pain_points(
             business['google_reviews'],
             business['website_analysis'],
-            business['website_quality_scores']
         )
         business.update(pain_results) # Adds 'icebreaker', 'identified_pains', etc.
 
@@ -135,6 +133,7 @@ def build_prospect_list(query: str, max_leads: int = 100, max_workers: int = 10)
                 if result:
                     # The 'sent_date' will be added by the sending script, not here.
                     final_prospects_data.append(result)
+                time.sleep(1) # Add a 1-second delay to avoid rate limiting
             except Exception as e:
                 logging.error(f"Error in main analysis pipeline: {e}")
 
