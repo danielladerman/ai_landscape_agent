@@ -18,20 +18,33 @@ SENIOR_LEVEL_TITLES = [
 # Common URL paths for contact/about pages
 CONTACT_PAGE_PATHS = ['/contact', '/contact-us', '/about', '/about-us', '/team']
 
+def _clean_email(email_string: str) -> str:
+    """Extracts a clean email address from a raw string using regex."""
+    match = re.search(EMAIL_REGEX, email_string)
+    if match:
+        return match.group(0).lower()
+    return None
+
 def _parse_for_contacts(soup: BeautifulSoup):
     """Parses a BeautifulSoup object to find emails and job titles."""
     found_emails = set()
     found_titles = set()
 
-    # Find all email addresses on the page
+    # Find all email addresses in the body text
     emails_in_body = re.findall(EMAIL_REGEX, soup.get_text())
-    found_emails.update([email.lower() for email in emails_in_body])
+    for email in emails_in_body:
+        cleaned = _clean_email(email)
+        if cleaned:
+            found_emails.add(cleaned)
     
     # Also check mailto links
     for a in soup.find_all('a', href=True):
         if a['href'].startswith('mailto:'):
-            email = a['href'][7:]
-            found_emails.add(email.lower())
+            # The raw string could be 'mailto:info@example.com?subject=...'
+            raw_email = a['href'][7:]
+            cleaned = _clean_email(raw_email)
+            if cleaned:
+                found_emails.add(cleaned)
 
     # Search for job titles in the page text
     page_text_lower = soup.get_text().lower()
