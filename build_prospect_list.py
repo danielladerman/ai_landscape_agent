@@ -93,10 +93,29 @@ def build_prospect_list(query: str, max_leads: int = 100, max_workers: int = 10)
     # --- PHASE 2: Lead Generation & Contact Finding ---
     logging.info("--- Finding new businesses via Google Maps... ---")
     gmaps = google_maps_finder.GoogleMapsFinder(api_key=settings.GOOGLE_MAPS_API_KEY)
-    businesses = gmaps.find_businesses(query, max_results=max_leads)
     
-    new_businesses = [b for b in businesses if b.get('website') and b.get('website') not in existing_websites]
-    logging.info(f"Found {len(new_businesses)} new businesses to process.")
+    # New logic: Keep searching until we have enough *new* businesses
+    new_businesses = []
+    page_token = None
+    processed_count = 0
+    max_search_results = max_leads * 5 # Search up to 5x the requested leads to find enough unique ones
+    
+    while len(new_businesses) < max_leads and processed_count < max_search_results:
+        businesses_page, page_token = gmaps.find_businesses_paginated(query, page_token=page_token)
+        processed_count += len(businesses_page)
+        
+        for b in businesses_page:
+            website = b.get('website')
+            if website and website not in existing_websites:
+                new_businesses.append(b)
+                existing_websites.add(website) # Add to set to prevent duplicates from the same search run
+                if len(new_businesses) >= max_leads:
+                    break
+        
+        if not page_token:
+            break # No more results from Google Maps
+
+    logging.info(f"Found {len(new_businesses)} new, unique businesses to process after checking against the tracker.")
 
     if not new_businesses:
         logging.info("--- No new businesses found. Process complete. ---")

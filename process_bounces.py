@@ -154,18 +154,12 @@ def process_bounces():
         
         g_service = google_sheets_helpers.get_google_sheets_service()
         if g_service:
-            # First, get the entire sheet as a DataFrame
-            prospects_df = google_sheets_helpers.get_sheet_as_df(g_service, settings.SPREADSHEET_ID, settings.GOOGLE_SHEET_NAME)
-            if prospects_df is not None:
-                google_sheets_helpers.update_bounced_status_bulk(
-                    g_service,
-                    settings.SPREADSHEET_ID,
-                    settings.GOOGLE_SHEET_NAME,
-                    bounced_recipients_info,  # Pass the dictionary
-                    prospects_df
-                )
-            else:
-                logging.error("Could not retrieve prospects from Google Sheet to check for bounces.")
+            google_sheets_helpers.update_bounced_status_bulk(
+                g_service,
+                settings.SPREADSHEET_ID,
+                settings.GOOGLE_SHEET_NAME,
+                bounced_recipients_info  # Pass the dictionary
+            )
         else:
             logging.error("Could not get Google Sheets service to update bounce statuses.")
 
