@@ -100,11 +100,19 @@ def run_follow_up_campaign(daily_limit: int):
         # --- Strategy Alignment Check ---
         # Ensure the prospect's original proposed solution aligns with our current strategy.
         try:
-            solutions = json.loads(prospect_dict.get('proposed_solutions', '[]'))
-            primary_solution = solutions[0] if solutions else ""
+            # The 'proposed_solutions' field is a plain string, not JSON.
+            # We can use the raw string directly.
+            primary_solution = prospect_dict.get('proposed_solutions', '')
             
-            # This is the crucial check. Only proceed if the original pitch was about content/social media/brand.
-            if "Content" not in primary_solution and "Social Media" not in primary_solution and "Brand" not in primary_solution and "Targeted Lead Generation" not in primary_solution:
+            # This is the crucial check. Only proceed if the original pitch was about our current strategy.
+            allowed_keywords = [
+                "Content",
+                "Social Media",
+                "Brand",
+                "Targeted Lead Generation",
+                "Curated Instagram Content Management"
+            ]
+            if not any(keyword in primary_solution for keyword in allowed_keywords):
                 logging.warning(f"Skipping follow-up for {prospect_dict['name']} due to outdated strategy ('{primary_solution}'). Marking as bounced.")
                 # Mark as bounced in the sheet
                 google_sheets_helpers.update_prospect_status(
@@ -124,8 +132,8 @@ def run_follow_up_campaign(daily_limit: int):
                     status_value='Outdated Strategy'
                 )
                 continue
-        except (json.JSONDecodeError, IndexError):
-            logging.warning(f"Skipping follow-up for {prospect_dict['name']} due to invalid 'proposed_solutions' format.")
+        except Exception as e:
+            logging.warning(f"Skipping follow-up for {prospect_dict['name']} due to a processing error: {e}")
             continue
             
         # 1. Generate the follow-up email
