@@ -12,7 +12,7 @@ from src.verification import email_verifier
 from src.review_analysis import review_analyzer
 from src.pain_analysis import pain_point_detector
 from src.email_generation import email_generator
-from src.google_sheets_helpers import get_google_sheets_service, get_sheet_as_df, append_df_to_sheet, add_tracking_columns, get_existing_websites_from_sheet
+from src.google_sheets_helpers import get_google_sheets_service, get_sheet_as_df, append_df_to_sheet, add_tracking_columns, get_existing_websites_from_sheet, get_existing_phones_from_sheet
 
 # --- Setup ---
 # Configure logging to write to a file in the 'logs' directory
@@ -86,9 +86,10 @@ def build_prospect_list(query: str, max_leads: int = 100, max_workers: int = 10)
 
     add_tracking_columns(service, settings.SPREADSHEET_ID, settings.GOOGLE_SHEET_NAME)
     
-    # Efficiently get existing websites to avoid duplicates
+    # Efficiently get existing data to avoid duplicates
     existing_websites = get_existing_websites_from_sheet(service, settings.SPREADSHEET_ID, settings.GOOGLE_SHEET_NAME)
-    logging.info(f"Found {len(existing_websites)} existing prospects in the tracker.")
+    existing_phones = get_existing_phones_from_sheet(service, settings.SPREADSHEET_ID, settings.GOOGLE_SHEET_NAME)
+    logging.info(f"Found {len(existing_websites)} existing websites and {len(existing_phones)} existing phone numbers in the tracker.")
 
     # --- PHASE 2: Lead Generation & Contact Finding ---
     logging.info("--- Finding new businesses via Google Maps... ---")
@@ -106,7 +107,13 @@ def build_prospect_list(query: str, max_leads: int = 100, max_workers: int = 10)
         
         for b in businesses_page:
             website = b.get('website')
+            phone = b.get('phone_number')
+
             if website and website not in existing_websites:
+                if phone and phone in existing_phones:
+                    logging.info(f"Skipping {b.get('name')} as a duplicate phone number was found.")
+                    continue
+
                 new_businesses.append(b)
                 existing_websites.add(website) # Add to set to prevent duplicates from the same search run
                 if len(new_businesses) >= max_leads:

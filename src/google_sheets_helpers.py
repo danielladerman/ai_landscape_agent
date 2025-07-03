@@ -72,6 +72,28 @@ def get_existing_websites_from_sheet(service, spreadsheet_id: str, sheet_name: s
         logging.error(f"🔴 Error fetching existing websites from sheet: {e}")
         return set()
 
+def get_existing_phones_from_sheet(service, spreadsheet_id: str, sheet_name: str) -> set:
+    """
+    Efficiently fetches only the 'Phone Number' column from the sheet to check for existing prospects.
+    """
+    try:
+        worksheet = get_worksheet(service, spreadsheet_id, sheet_name)
+        if not worksheet:
+            return set()
+
+        header_row = worksheet.row_values(1)
+        if 'phone_number' not in header_row:
+            logging.warning("Column 'phone_number' not found in the sheet. Cannot check for duplicate phones.")
+            return set()
+
+        phone_column_index = header_row.index('phone_number') + 1
+        phones = worksheet.col_values(phone_column_index)
+
+        return set(phones[1:])
+    except Exception as e:
+        logging.error(f"🔴 Error fetching existing phone numbers from sheet: {e}")
+        return set()
+
 def get_all_prospects(service, spreadsheet_id, sheet_name):
     """Fetches all prospects from the specified sheet and returns them as a DataFrame."""
     worksheet = get_worksheet(service, spreadsheet_id, sheet_name)
