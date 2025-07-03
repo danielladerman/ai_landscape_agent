@@ -123,9 +123,10 @@ I hope you're having a great week.
 
 I'm writing to follow up on my previous email. {doc_description}
 
+{competitor_mention_stage1}
+
 You can view the guide here: {educational_doc_url}
 
-{competitor_mention_stage1}
 
 Are you free for a quick chat next week to discuss how a similar strategy could work for {business_name}?
 
@@ -137,37 +138,36 @@ https://www.lacadconsulting.com
 
     elif stage == 2:
         subject = f"Some thoughts for {business_name}"
-        body = f"""<html>
-<head></head>
-<body>
-<p>Hey {business_name},</p>
-<p>Just wanted to quickly touch base one more time.. Here are some testimonials and references from companies we've worked with—feel free to check them out. Let me know if you have any questions.</p>
-<br>
-<p><b>Video Testimonials</b></p>
-<p><a href="https://vimeo.com/681122826">Josh Webber - Webber Films</a></p>
-<p><a href="https://vimeo.com/603391977">Shye Lee and Aishah Mo</a></p>
-<p><a href="https://vimeo.com/603391593">Johnny Stephene, Dribble2Much - HandleLife</a></p>
-<p><a href="https://vimeo.com/603391669">Josh Perelin</a></p>
-<br>
-<p><b>References</b></p>
-<p><a href="https://pso-rite.com">Pso-Rite</a> | <a href="https://www.instagram.com/pso_rite/">IG</a></p>
-<p><a href="https://www.handlelife.com">HandleLife</a> | <a href="https://www.instagram.com/handlelife">IG</a></p>
-<p><a href="https://unlimitter.com">Unlimitter</a> | <a href="https://www.tiktok.com/@unlimitter">TikTok</a> | <a href="https://www.instagram.com/getunlimitter/">IG</a></p>
-<p><a href="https://airelleskin.com">Airelle Skincare</a> | <a href="https://www.instagram.com/airelleskin/">IG</a></p>
-<p><a href="https://www.focusgts.com">Focus Global Talent Services</a> | <a href="https://www.instagram.com/focusglobaltalent/">IG</a></p>
-<p><a href="https://www.bloombeaconhr.com">Bloom & Beacon</a> | <a href="https://www.instagram.com/bloombeaconhr/">IG</a></p>
-<br>
-<p>If turning your impressive work into a client-attracting social media brand is something you're considering, I'd be happy to share some initial thoughts. Let me know if you're open to a brief 15-minute call next week.</p>
-<br>
-<p>--</p>
-<p>Respectfully,</p>
-<p><b>Daniel Laderman</b><br>
-Brand & Content Strategist<br>
-Lacad Consulting<br>
-<a href="https://www.lacadconsulting.com">lacadconsulting.com</a></p>
-</body>
-</html>
+        body = f"""Hey {business_name},
+Just wanted to quickly touch base one more time.. Here are some testimonials and references from companies we've worked with—feel free to check them out. Let me know if you have any questions.
+
+Video Testimonials
+Josh Webber - Webber Films - "https://vimeo.com/681122826"
+Shye Lee and Aishah Mo - "https://vimeo.com/603391977"
+Johnny Stephene, Dribble2Much - HandleLife - "https://vimeo.com/603391593"
+Josh Perelin - "https://vimeo.com/603391669"
+
+References
+"https://pso-rite.com">Pso-Rite | "https://www.instagram.com/pso_rite/" - IG
+"https://www.handlelife.com">HandleLife | "https://www.instagram.com/handlelife" - IG
+"https://unlimitter.com">Unlimitter | "https://www.tiktok.com/@unlimitter" - TikTok | "https://www.instagram.com/getunlimitter/" - IG
+"https://airelleskin.com">Airelle Skincare | "https://www.instagram.com/airelleskin/" - IG
+"https://www.focusgts.com">Focus Global Talent Services | "https://www.instagram.com/focusglobaltalent/" - IG
+"https://www.bloombeaconhr.com">Bloom & Beacon | "https://www.instagram.com/bloombeaconhr/" - IG
+
+If turning your impressive work into a client-attracting social media brand is something you're considering, I'd be happy to share some initial thoughts. Let me know if you're open to a brief 15-minute call next week.
+
+
+Respectfully,
+Daniel Laderman
+Brand & Content Strategist
+Lacad Consulting
+"https://www.lacadconsulting.com"
+
+
 """
+
+
 
     elif stage == 3:
         subject = "One last thing..."
