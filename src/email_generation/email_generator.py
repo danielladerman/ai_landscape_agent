@@ -1,6 +1,12 @@
 import openai
+from openai import OpenAI
 from config.config import settings
 import json
+import logging
+
+# --- OpenAI Client Initialization ---
+client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
 
 def generate_personalized_email(business_name, titles, icebreaker, pains, solutions, evidence):
     """
@@ -18,7 +24,9 @@ def generate_personalized_email(business_name, titles, icebreaker, pains, soluti
         dict: A dictionary containing the 'subject' and 'body' of the email,
               or None if an error occurs.
     """
-    openai.api_key = settings.OPENAI_API_KEY
+    if not settings.OPENAI_API_KEY:
+        logging.error("🔴 OPENAI_API_KEY is not configured. Cannot generate email.")
+        return None
 
     # --- Deconstruct the analysis ---
     pain_point = json.loads(pains)[0] if pains and pains != '[]' else "attracting high-value clients"
@@ -73,8 +81,8 @@ def generate_personalized_email(business_name, titles, icebreaker, pains, soluti
     """
 
     try:
-        print(f"Generating email for {business_name} with new expert persona...")
-        response = openai.chat.completions.create(
+        logging.info(f"Generating email for {business_name} with new expert persona...")
+        response = client.chat.completions.create(
             model="gpt-4-turbo-preview",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
@@ -83,11 +91,11 @@ def generate_personalized_email(business_name, titles, icebreaker, pains, soluti
         )
         
         email_content = json.loads(response.choices[0].message.content)
-        print(f"  > Success!")
+        logging.info(f"  > Success!")
         return email_content
 
     except Exception as e:
-        print(f"🔴 Error generating email for {business_name}: {e}")
+        logging.error(f"🔴 Error generating email for {business_name}: {e}")
         return None
 
 def generate_follow_up_email(prospect_data: dict, stage: int):

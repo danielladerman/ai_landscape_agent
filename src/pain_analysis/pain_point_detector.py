@@ -4,8 +4,14 @@ import json
 import pandas as pd
 from urllib.parse import urlparse
 import openai
+from openai import OpenAI
 from config.config import settings
 import logging
+
+# --- OpenAI Client Initialization ---
+# It's best practice to initialize the client once and reuse it.
+client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
 
 def download_nltk_data():
     """Downloads the VADER lexicon required for sentiment analysis if not present."""
@@ -17,9 +23,9 @@ def download_nltk_data():
 
 def generate_icebreaker(reviews_json, analysis_json):
     """Uses an LLM to generate a genuine, non-technical compliment about their work."""
-    openai.api_key = settings.OPENAI_API_KEY
-    if not openai.api_key:
-        return "I was looking at your online presence" # Fallback
+    if not settings.OPENAI_API_KEY:
+        logging.warning("OPENAI_API_KEY not found. Returning a fallback icebreaker.")
+        return "I was looking at your online presence"
 
     prompt = f"""
     You are a marketing strategist who excels at writing genuine, one-sentence compliments for business outreach.
@@ -45,7 +51,7 @@ def generate_icebreaker(reviews_json, analysis_json):
     }}
     """
     try:
-        response = openai.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-4-turbo-preview",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,

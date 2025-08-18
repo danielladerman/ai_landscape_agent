@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Outreach Command Center</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --background_primary: #0A0A0A;
+            --background_secondary: #141414;
+            --card_background: #1A1A1A;
+            --card_hover_background: #1F1F1F;
+            --border: #2B2B2B;
+            --text_primary: #F0F0F0;
+            --text_secondary: #9E9E9E;
+            --accent_primary: #007BFF;
+            --accent_hover: #3395FF;
+            --accent_disabled: #4A4A4A;
+            --status_idle: #6C757D;
+            --status_running: #FFC107;
+            --status_success: #28A745;
+            --status_error: #DC3545;
+            --log_text: #B0B0B0;
+            --font_family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            --border_radius: 8px;
+            --card_padding: 24px;
+            --transition_speed: 0.2s ease-in-out;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font_family);
+            background-color: var(--background_primary);
+            color: var(--text_primary);
+            margin: 0;
+            padding: 40px 20px;
+        }
+
+        .command-center {
+            max-width: 900px;
+            margin: 0 auto;
+            display: grid;
+            gap: 40px;
+        }
+
+        .main-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 20px;
+        }
+
+        .main-header h1 {
+            font-size: 24px;
+            margin: 0;
+        }
+
+        .master-status-indicator {
+            font-size: 14px;
+            font-weight: 500;
+            padding: 6px 12px;
+            border-radius: 100px;
+            transition: all var(--transition_speed);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .master-status-indicator::before {
+            content: '';
+            display: block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: currentColor;
+        }
+        
+        .master-status-indicator[data-status="idle"] { color: var(--status_idle); background-color: rgba(108, 117, 125, 0.1); }
+        .master-status-indicator[data-status="running"] { color: var(--status_running); background-color: rgba(255, 193, 7, 0.1); }
+        .master-status-indicator[data-status="success"] { color: var(--status_success); background-color: rgba(40, 167, 69, 0.1); }
+        .master-status-indicator[data-status="error"] { color: var(--status_error); background-color: rgba(220, 53, 69, 0.1); }
+
+
+        .action-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .action-card {
+            background-color: var(--card_background);
+            border: 1px solid var(--border);
+            border-radius: var(--border_radius);
+            padding: var(--card_padding);
+            transition: background-color var(--transition_speed), border-color var(--transition_speed), box-shadow var(--transition_speed);
+            position: relative;
+        }
+
+        .action-card:hover {
+            background-color: var(--card_hover_background);
+            border-color: #444;
+        }
+
+        @keyframes running-glow {
+            0% { box-shadow: 0 0 8px rgba(255, 193, 7, 0); }
+            50% { box-shadow: 0 0 12px rgba(255, 193, 7, 0.4); }
+            100% { box-shadow: 0 0 8px rgba(255, 193, 7, 0); }
+        }
+
+        .action-card[data-status="running"] {
+            border-color: var(--status_running);
+            animation: running-glow 2s infinite;
+        }
+        .action-card[data-status="success"] { border-color: var(--status_success); }
+        .action-card[data-status="error"] { border-color: var(--status_error); }
+
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            transition: background-color var(--transition_speed);
+        }
+        
+        .status-dot[data-status="idle"] { background-color: var(--status_idle); }
+        .status-dot[data-status="running"] { background-color: var(--status_running); }
+        .status-dot[data-status="success"] { background-color: var(--status_success); }
+        .status-dot[data-status="error"] { background-color: var(--status_error); }
+
+        .card-title h2 {
+            font-size: 18px;
+            margin: 0;
+            color: var(--text_primary);
+        }
+        .card-title p {
+            font-size: 14px;
+            color: var(--text_secondary);
+            margin: 4px 0 0;
+        }
+
+        .card-form {
+            margin-top: 20px;
+            display: grid;
+            gap: 15px;
+        }
+
+        .input-group {
+            display: grid;
+            gap: 8px;
+        }
+
+        .input-group label {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text_secondary);
+        }
+        
+        .input-group input {
+            background-color: var(--background_secondary);
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            padding: 10px;
+            color: var(--text_primary);
+            font-size: 14px;
+            width: 100%;
+        }
+        
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--accent_primary);
+        }
+
+        .card-button {
+            background-color: var(--accent_primary);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color var(--transition_speed);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-button:hover { background-color: var(--accent_hover); }
+        
+        .card-button:disabled {
+            background-color: var(--accent_disabled);
+            color: var(--text_secondary);
+            cursor: not-allowed;
+        }
+        
+        .card-button svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        #card-utilities .utility-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        #card-utilities .utility-buttons form {
+            flex: 1;
+        }
+        #card-utilities .card-button {
+            width: 100%;
+        }
+
+
+        .log-terminal {
+            background-color: var(--card_background);
+            border: 1px solid var(--border);
+            border-radius: var(--border_radius);
+        }
+
+        .terminal-header {
+            padding: 15px var(--card_padding);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .terminal-header h2 {
+            font-size: 16px;
+            margin: 0;
+            color: var(--text_secondary);
+        }
+
+        .log-content {
+            height: 400px;
+            overflow-y: scroll;
+            padding: var(--card_padding);
+            font-family: 'SF Mono', 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--log_text);
+        }
+
+        .log-line {
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .log-line[data-level="ERROR"] { color: var(--status_error); }
+        .log-line[data-level="SUCCESS"] { color: var(--status_success); }
+        .log-line[data-level="WARNING"] { color: var(--status_running); }
+
+        #splash-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 9999;
+        }
+    </style>
+</head>
+<body>
+    <div id="splash-container"></div>
+    <main class="command-center">
+        <header class="main-header">
+            <h1>AI Outreach Command Center</h1>
+            <div id="master-status" class="master-status-indicator" data-status="idle">
+                System Idle
+            </div>
+        </header>
+
+        <section class="action-grid">
+            
+            <!-- Card 1: Build Prospect List -->
+            <div class="action-card" id="card-build_prospect_list" data-script-name="build_prospect_list" data-status="idle">
+                <div class="card-header">
+                    <div class="status-dot" data-status="idle"></div>
+                    <div class="card-title">
+                        <h2>Build Prospect List</h2>
+                        <p>The discovery engine. Finds new leads from the web.</p>
+                    </div>
+                </div>
+                <form class="card-form">
+                    <div class="input-group">
+                        <label for="query">Search Query</label>
+                        <input type="text" id="query" name="query" placeholder="e.g., landscaping in San Diego" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="max_leads">Max Leads</label>
+                        <input type="number" id="max_leads" name="max_leads" placeholder="e.g., 50" required>
+                    </div>
+                    <button type="submit" class="card-button">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+                        <span>Start Build</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Card 2: Run Daily Sending -->
+            <div class="action-card" id="card-run_daily_sending" data-script-name="run_daily_sending" data-status="idle">
+                <div class="card-header">
+                    <div class="status-dot" data-status="idle"></div>
+                    <div class="card-title">
+                        <h2>Run Daily Sending</h2>
+                        <p>Sends the initial batch of personalized emails.</p>
+                    </div>
+                </div>
+                <form class="card-form">
+                    <div class="input-group">
+                        <label for="max_emails">Max Emails to Send</label>
+                        <input type="number" id="max_emails" name="max_emails" placeholder="e.g., 25" required>
+                    </div>
+                    <button type="submit" class="card-button">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
+                        <span>Send Daily Batch</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Card 3: Run Follow-ups -->
+            <div class="action-card" id="card-run_follow_ups" data-script-name="run_follow_ups" data-status="idle">
+                <div class="card-header">
+                    <div class="status-dot" data-status="idle"></div>
+                    <div class="card-title">
+                        <h2>Run Follow-ups</h2>
+                        <p>Sends scheduled follow-up emails to prospects.</p>
+                    </div>
+                </div>
+                <form class="card-form">
+                     <div class="input-group">
+                        <label for="limit">Daily Follow-up Limit</label>
+                        <input type="number" id="limit" name="limit" placeholder="e.g., 25" required>
+                    </div>
+                    <button type="submit" class="card-button">
+                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.678 48.678 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7c-.092 1.21-.138 2.43-.138 3.662v.513a5.035 5.035 0 004.838 5.035h1.116a5.035 5.035 0 004.838-5.035v-.513z" /></svg>
+                        <span>Start Follow-up Campaign</span>
+                    </button>
+                </form>
+            </div>
+            
+            <!-- Card 4: System Utilities -->
+            <div class="action-card" id="card-utilities">
+                 <div class="card-header">
+                    <div class="status-dot" data-status="idle"></div>
+                    <div class="card-title">
+                        <h2>System Utilities</h2>
+                        <p>Maintenance tasks for keeping the system clean.</p>
+                    </div>
+                </div>
+                <div class="utility-buttons">
+                    <form data-script-name="process_bounces">
+                        <button type="submit" class="card-button">
+                            Process Bounces
+                        </button>
+                    </form>
+                    <form data-script-name="deduplicate_sheet">
+                         <button type="submit" class="card-button">
+                            Deduplicate Sheet
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <section class="log-terminal">
+            <header class="terminal-header">
+                <h2>Live System Log Stream</h2>
+            </header>
+            <div id="log-container" class="log-content"></div>
+        </section>
+    </main>
+
+    <!-- React Library Scripts -->
+    <script src="https://unpkg.com/react@17/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js" crossorigin></script>
+    
+    <!-- The SplashCursor Component -->
+    <script src="/templates/SplashCursor.js"></script>
+    
+    <!-- Main App Logic -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Render the SplashCursor component
+            ReactDOM.render(
+                React.createElement(SplashCursor),
+                document.getElementById('splash-container')
+            );
+            
+            const app = {
+                state: {
+                    statuses: {},
+                    logs: []
+                },
+                elements: {
+                    cards: document.querySelectorAll('.action-card[data-script-name]'),
+                    forms: document.querySelectorAll('form'),
+                    logContainer: document.getElementById('log-container'),
+                    masterStatus: document.getElementById('master-status')
+                },
+
+                init() {
+                    this.addEventListeners();
+                    this.startPolling();
+                },
+
+                addEventListeners() {
+                    this.elements.forms.forEach(form => {
+                        form.addEventListener('submit', this.handleFormSubmit.bind(this));
+                    });
+                },
+
+                async handleFormSubmit(event) {
+                    event.preventDefault();
+                    const form = event.currentTarget;
+                    const scriptName = form.dataset.scriptName || form.closest('.action-card').dataset.scriptName;
+                    const button = form.querySelector('button[type="submit"]');
+
+                    if (button && button.disabled) return;
+
+                    const formData = new FormData(form);
+                    
+                    try {
+                        const response = await fetch(`/run-script/${scriptName}`, {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        if (response.status === 202) {
+                            // Immediately update UI for responsiveness
+                            this.state.statuses[scriptName] = { status: 'running' };
+                            this.updateUI();
+                        } else {
+                            const errorData = await response.json();
+                            alert(`Error: ${errorData.message}`);
+                        }
+                    } catch (error) {
+                        console.error('Failed to start script:', error);
+                        alert('An error occurred while trying to start the script.');
+                    }
+                },
+
+                startPolling() {
+                    setInterval(async () => {
+                        try {
+                            const [statusRes, logsRes] = await Promise.all([
+                                fetch('/status'),
+                                fetch('/logs')
+                            ]);
+                            
+                            const newStatuses = await statusRes.json();
+                            const newLogsData = await logsRes.json();
+                            
+                            this.state.statuses = newStatuses;
+                            this.state.logs = newLogsData.logs;
+
+                            this.updateUI();
+                            this.renderLogs();
+
+                        } catch (error) {
+                            console.error('Polling error:', error);
+                        }
+                    }, 2000);
+                },
+
+                updateUI() {
+                    let isAnyScriptRunning = false;
+                    let lastCompletedStatus = 'success';
+
+                    this.elements.cards.forEach(card => {
+                        const scriptName = card.dataset.scriptName;
+                        const statusData = this.state.statuses[scriptName];
+                        if (!statusData) return;
+                        
+                        const status = statusData.status;
+                        card.dataset.status = status;
+                        
+                        const statusDot = card.querySelector('.status-dot');
+                        if (statusDot) statusDot.dataset.status = status;
+
+                        const button = card.querySelector('button[type="submit"]');
+                        if(button) {
+                            const buttonTextSpan = button.querySelector('span');
+                            button.disabled = (status === 'running');
+                            
+                            if (buttonTextSpan) {
+                                if (status === 'running') {
+                                    buttonTextSpan.textContent = 'Running...';
+                                } else if (status === 'success') {
+                                    buttonTextSpan.textContent = 'Run Again';
+                                } else {
+                                    buttonTextSpan.textContent = this.getInitialButtonText(scriptName);
+                                }
+                            } else {
+                                // For utility buttons without spans
+                                if (status === 'running') button.textContent = 'Running...';
+                                else button.textContent = this.getInitialButtonText(scriptName);
+                            }
+                        }
+
+                        if (status === 'running') isAnyScriptRunning = true;
+                        if (status === 'error') lastCompletedStatus = 'error';
+                    });
+                    
+                    // Update master status
+                    if(isAnyScriptRunning) {
+                        this.elements.masterStatus.dataset.status = 'running';
+                        this.elements.masterStatus.textContent = 'System Active';
+                    } else {
+                         if(lastCompletedStatus === 'error'){
+                            this.elements.masterStatus.dataset.status = 'error';
+                            this.elements.masterStatus.textContent = 'System Error';
+                         } else {
+                             this.elements.masterStatus.dataset.status = 'idle';
+                            this.elements.masterStatus.textContent = 'System Idle';
+                         }
+                    }
+                },
+                
+                getInitialButtonText(scriptName) {
+                    const texts = {
+                        'build_prospect_list': 'Start Build',
+                        'run_daily_sending': 'Send Daily Batch',
+                        'run_follow_ups': 'Start Follow-up Campaign',
+                        'process_bounces': 'Process Bounces',
+                        'deduplicate_sheet': 'Deduplicate Sheet'
+                    };
+                    return texts[scriptName] || 'Run';
+                },
+
+                renderLogs() {
+                    // Simple re-render, can be optimized to only append new logs if needed
+                    this.elements.logContainer.innerHTML = '';
+                    this.state.logs.forEach(line => {
+                        const lineEl = document.createElement('div');
+                        lineEl.className = 'log-line';
+                        
+                        if (line.includes('ERROR') || line.includes('Failed')) {
+                            lineEl.dataset.level = 'ERROR';
+                        } else if (line.includes('SUCCESS') || line.includes('Successfully')) {
+                            lineEl.dataset.level = 'SUCCESS';
+                        } else if (line.includes('WARNING')) {
+                             lineEl.dataset.level = 'WARNING';
+                        }
+                        
+                        lineEl.textContent = line;
+                        this.elements.logContainer.appendChild(lineEl);
+                    });
+                    this.elements.logContainer.scrollTop = this.elements.logContainer.scrollHeight;
+                }
+            };
+
+            app.init();
+        });
+    </script>
+</body>
+</html>
