@@ -7,11 +7,21 @@ import subprocess
 import threading
 import logging
 from collections import deque
+from datetime import datetime
+from src import google_sheets_helpers
+from config.config import settings
+import base64
+import os
 
 # --- Setup ---
 app = FastAPI()
-app.mount("/templates", StaticFiles(directory="templates"), name="templates")
-templates = Jinja2Templates(directory="templates")
+
+# Adjust paths for Vercel deployment
+# The templates directory is now one level up from the 'api' directory
+templates_dir = os.path.join(os.path.dirname(__file__), '..', 'templates')
+app.mount("/templates", StaticFiles(directory=templates_dir), name="templates")
+templates = Jinja2Templates(directory=templates_dir)
+
 log_buffer = deque(maxlen=300) # Store the last 300 log lines
 
 # --- Logging ---
@@ -135,5 +145,5 @@ async def get_logs():
     return JSONResponse(content={"logs": list(log_buffer)})
 
 if __name__ == "__main__":
-    print("Starting web server at http://127.0.0.1:8000")
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    print("Starting web server for local development at http://127.0.0.1:8000")
+    uvicorn.run("index:app", host="127.0.0.1", port=8000, reload=True)
