@@ -24,7 +24,7 @@ googlemaps
 # zerobounce
 
 # NLP for Pain Point Identification
-nltk
+vaderSentiment
 
 # Google Sheets
 gspread
