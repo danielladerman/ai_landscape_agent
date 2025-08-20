@@ -213,8 +213,8 @@ def update_sent_status(service, spreadsheet_id, sheet_name, prospect_name, colum
         
         col_index = header_row.index(column_name) + 1
         
-        # Update the cell in that row with today's date and time
-        timestamp = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
+        # Update the cell in that row with today's date
+        timestamp = pd.Timestamp.now().strftime('%Y-%m-%d')
         worksheet.update_cell(found_row, col_index, timestamp)
 
         # Also update the 'last_contact_date'
@@ -252,7 +252,7 @@ def update_follow_up_status(service, spreadsheet_id, sheet_name, prospect_name, 
             return False
             
         col_index = header_row.index(column_to_update) + 1
-        timestamp = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
+        timestamp = pd.Timestamp.now().strftime('%Y-%m-%d')
         worksheet.update_cell(cell.row, col_index, timestamp)
 
         # Also update the 'last_contact_date'
@@ -315,7 +315,7 @@ def update_sent_status_bulk(service, spreadsheet_id, sheet_name, prospect_names:
         df = pd.DataFrame(all_records)
 
         # Use a vectorized operation with .isin() for a robust, single-shot update
-        timestamp = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
+        timestamp = pd.Timestamp.now().strftime('%Y-%m-%d')
         mask = df['name'].isin(prospect_names)
         updated_count = mask.sum()
 
@@ -481,11 +481,11 @@ def backfill_last_contact_dates(service, spreadsheet_id, sheet_name):
         df['last_contact_date'] = df[date_cols].max(axis=1)
         
         # Format dates back to strings, leaving empty where no date was found
-        df['last_contact_date'] = df['last_contact_date'].dt.strftime('%Y-%m-%d %H:%M:%S').fillna('')
+        df['last_contact_date'] = df['last_contact_date'].dt.strftime('%Y-%m-%d').fillna('')
         
         # Format the other date columns back to string as well to avoid writing 'NaT'
         for col in date_cols:
-            df[col] = df[col].dt.strftime('%Y-%m-%d %H:%M:%S').fillna('')
+            df[col] = df[col].dt.strftime('%Y-%m-%d').fillna('')
         
         logging.info("Backfill calculation complete. Overwriting sheet with updated dates...")
         

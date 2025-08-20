@@ -7,19 +7,27 @@ import openai
 from openai import OpenAI
 from config.config import settings
 import logging
+import os
 
 # --- OpenAI Client Initialization ---
 # It's best practice to initialize the client once and reuse it.
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
+# --- NLTK Setup for Serverless Environment ---
+# On platforms like Vercel, only the /tmp directory is writable.
+NLTK_DATA_PATH = os.path.join(os.path.sep, 'tmp', 'nltk_data')
+nltk.data.path.append(NLTK_DATA_PATH)
 
 def download_nltk_data():
-    """Downloads the VADER lexicon required for sentiment analysis if not present."""
+    """
+    Downloads the VADER lexicon to a writable directory (/tmp) if not present.
+    """
     try:
         nltk.data.find('sentiment/vader_lexicon.zip')
     except nltk.downloader.DownloadError:
-        print("Downloading VADER lexicon for sentiment analysis...")
-        nltk.download('vader_lexicon')
+        logging.info("VADER lexicon not found. Downloading to /tmp/nltk_data...")
+        nltk.download('vader_lexicon', download_dir=NLTK_DATA_PATH)
+        logging.info("Download complete.")
 
 def generate_icebreaker(reviews_json, analysis_json):
     """Uses an LLM to generate a genuine, non-technical compliment about their work."""
@@ -68,6 +76,9 @@ def analyze_pain_points(reviews_json, analysis_json):
     Analyzes a prospect's online presence to identify the opportunity
     to build a powerful social media presence.
     """
+    # Ensure NLTK data is available before running analysis that might need it.
+    download_nltk_data()
+    
     analysis = json.loads(analysis_json) if analysis_json and analysis_json != 'null' else {}
 
     # --- Icebreaker Generation ---

@@ -45,15 +45,15 @@ def run_follow_up_campaign(daily_limit: int):
             df[col] = '' # Add missing columns to prevent KeyErrors
             logging.warning(f"Added missing column '{col}' to DataFrame.")
 
-    # Convert date columns to datetime objects for comparison
+    # Convert date columns to datetime objects for comparison, keeping only the date part
     for col in ['sent_date', 'follow_up_1_sent_date', 'follow_up_2_sent_date']:
-        df[col] = pd.to_datetime(df[col], errors='coerce')
+        df[col] = pd.to_datetime(df[col], errors='coerce').dt.date
 
     # Filter out prospects who should not be contacted
     active_prospects = df[df['email_status'].isin(['', 'Sent', 'Delivered'])].copy()
     
     # --- Determine Which Follow-up to Send ---
-    today = datetime.now()
+    today = datetime.now().date()
     prospects_to_email = []
 
     for index, row in active_prospects.iterrows():

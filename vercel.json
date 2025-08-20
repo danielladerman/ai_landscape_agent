@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "api/index.py": {
+      "excludeFiles": "{tests,logs,data,.vscode,venv}/**"
+    }
+  },
   "builds": [
     {
       "src": "api/index.py",
