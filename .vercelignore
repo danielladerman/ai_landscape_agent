@@ -1,0 +1,17 @@
+# Ignore common directories and files
+.vscode/
+.git/
+.gitignore
+venv/
+tests/
+logs/
+data/
+
+# Ignore Python specific cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore local development files
+.env
