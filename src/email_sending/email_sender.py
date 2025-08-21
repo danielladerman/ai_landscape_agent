@@ -18,8 +18,12 @@ def send_email(recipient_email: str, subject: str, body: str) -> bool:
         message['to'] = recipient_email
         message['subject'] = subject
         
+        # --- HTML Formatting ---
+        # Replace newline characters with HTML line breaks for proper rendering.
+        html_body = body.replace('\n', '<br>')
+        
         # The body of the email is now attached as HTML
-        message.attach(MIMEText(body, 'html'))
+        message.attach(MIMEText(html_body, 'html'))
 
         # The API requires the message to be base64url encoded
         raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
