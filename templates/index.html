@@ -389,7 +389,7 @@
     <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js" crossorigin></script>
     
     <!-- The SplashCursor Component -->
-    <script src="/templates/SplashCursor.js"></script>
+    <script src="/static/SplashCursor.js"></script>
     
     <!-- Main App Logic -->
     <script>
@@ -401,6 +401,7 @@
             );
             
             const app = {
+                apiKey: "{{ api_key }}",
                 state: {
                     statuses: {},
                     logs: []
@@ -436,6 +437,9 @@
                     try {
                         const response = await fetch(`/run-script/${scriptName}`, {
                             method: 'POST',
+                            headers: {
+                                'X-API-KEY': this.apiKey
+                            },
                             body: formData
                         });
                         

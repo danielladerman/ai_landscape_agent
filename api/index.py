@@ -1,5 +1,14 @@
 import uvicorn
-from fastapi import FastAPI, Request, Form
+import sys
+import os
+
+# Add the project root to the Python path. This is required for the API server
+# to find the `src` module when running from the `api/` directory.
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from fastapi import FastAPI, Request, Form, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -11,7 +20,20 @@ from datetime import datetime
 from src import google_sheets_helpers
 from config.config import settings
 import base64
-import os
+from fastapi.security import APIKeyHeader
+
+# --- Security ---
+API_KEY_NAME = "X-API-KEY"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+async def get_api_key(api_key: str = Depends(api_key_header)):
+    """Dependency to validate the API key."""
+    if not api_key or api_key != settings.WEB_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Could not validate credentials"
+        )
+    return api_key
 
 # --- Setup ---
 app = FastAPI()
@@ -19,7 +41,7 @@ app = FastAPI()
 # Adjust paths for Vercel deployment
 # The templates directory is now one level up from the 'api' directory
 templates_dir = os.path.join(os.path.dirname(__file__), '..', 'templates')
-app.mount("/templates", StaticFiles(directory=templates_dir), name="templates")
+app.mount("/static", StaticFiles(directory=templates_dir), name="static")
 templates = Jinja2Templates(directory=templates_dir)
 
 log_buffer = deque(maxlen=300) # Store the last 300 log lines
@@ -94,14 +116,15 @@ def run_script_in_thread(script_name: str, args: list = []):
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
     """Serves the main control panel HTML page."""
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse("index.html", {"request": request, "api_key": settings.WEB_API_KEY})
 
 @app.post("/run-script/{script_name}")
 async def run_script_endpoint(script_name: str, 
                               query: str = Form(None), 
                               max_leads: int = Form(None),
                               max_emails: int = Form(None),
-                              limit: int = Form(None)):
+                              limit: int = Form(None),
+                              api_key: str = Depends(get_api_key)):
     """
     Endpoint to trigger a script. Runs it in a background thread to avoid blocking.
     """
