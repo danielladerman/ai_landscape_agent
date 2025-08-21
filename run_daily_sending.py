@@ -2,12 +2,14 @@ import pandas as pd
 import logging
 import argparse
 import re # Import the regex module
+import os
 from datetime import datetime
 from config.config import settings
 from src.google_sheets_helpers import get_google_sheets_service, get_sheet_as_df, update_sent_status_bulk, update_bounced_status_bulk, add_tracking_columns
 from src.email_sending import email_sender
 
 # --- Logging Setup ---
+os.makedirs("logs", exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',

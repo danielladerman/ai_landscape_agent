@@ -4,6 +4,7 @@ import logging
 import argparse
 import json
 import time
+import os
 
 from config.config import settings
 from src.lead_generation import google_maps_finder
@@ -15,6 +16,9 @@ from src.email_generation import email_generator
 from src.google_sheets_helpers import get_google_sheets_service, get_sheet_as_df, append_df_to_sheet, add_tracking_columns, get_existing_websites_from_sheet, get_existing_phones_from_sheet
 
 # --- Setup ---
+# Ensure the logs directory exists before setting up logging
+os.makedirs("logs", exist_ok=True)
+
 # Configure logging to write to a file in the 'logs' directory
 logging.basicConfig(
     level=logging.INFO,
