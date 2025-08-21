@@ -44,18 +44,19 @@ class Settings(BaseSettings):
     # The application will fail to start if they are missing.
     OPENAI_API_KEY: str = Field(..., description="API key for OpenAI services.")
     GOOGLE_MAPS_API_KEY: str = Field(..., description="API key for Google Maps Places API.")
+    WEB_API_KEY: str = Field("your_secret_api_key", description="A secret key to protect web endpoints.")
 
     # --- Google Sheets Configuration (Required) ---
     SPREADSHEET_ID: str = Field(..., description="The ID of the Google Sheet for tracking prospects.")
-    GOOGLE_SHEET_NAME: str = "Sheet1"
+    GOOGLE_SHEET_NAME: str = "Sheet2"
 
     # --- File Paths ---
     # These paths are derived from the project's base directory.
     BASE_DIR: str = BASE_DIR
     PROSPECTS_DATA_PATH: str = os.path.join(BASE_DIR, 'data', 'master_prospect_list.csv')
-    GOOGLE_CREDENTIALS_PATH: str = os.path.join(BASE_DIR, 'config', 'google_credentials.json')
-    GMAIL_API_CREDENTIALS_PATH: str = os.path.join(BASE_DIR, 'config', 'credentials.json')
-    GMAIL_API_TOKEN_PATH: str = os.path.join(BASE_DIR, 'config', 'token.json')
+    GOOGLE_CREDENTIALS_PATH: str = os.path.join(BASE_DIR, 'google_credentials.json')
+    GMAIL_API_CREDENTIALS_PATH: str = os.path.join(BASE_DIR, 'credentials.json')
+    GMAIL_API_TOKEN_PATH: str = os.path.join(BASE_DIR, 'token.json')
 
     # --- Optional & Defaulted Settings ---
     # These settings have sensible defaults but can be overridden via the .env file.
