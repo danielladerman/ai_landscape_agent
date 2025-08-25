@@ -79,15 +79,17 @@ def run_script_in_thread(script_name: str, args: list = []):
     process_status[script_name]["status"] = "running"
     
     try:
-        command = ["python3", f"{script_name}.py"] + args
-        logger.info(f"Starting script with command: {' '.join(command)}")
+        script_path = os.path.join(project_root, f"{script_name}.py")
+        command = ["python3", script_path] + args
+        logger.info(f"Starting script with command: {' '.join(command)} (cwd={project_root})")
         
         process = subprocess.Popen(
-            command, 
-            stdout=subprocess.PIPE, 
-            stderr=subprocess.STDOUT, 
-            text=True, 
-            bufsize=1, 
+            command,
+            cwd=project_root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
             universal_newlines=True
         )
         process_status[script_name]["pid"] = process.pid
