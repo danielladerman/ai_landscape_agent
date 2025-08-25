@@ -18,7 +18,6 @@ import logging
 from collections import deque
 from datetime import datetime
 from src import google_sheets_helpers
-from src import gmail_helpers
 from config.config import settings
 import base64
 from fastapi.security import APIKeyHeader
@@ -172,7 +171,7 @@ async def get_logs():
 @app.get("/dashboard-data")
 async def get_dashboard_data(api_key: str = Depends(get_api_key)):
     """
-    Endpoint to fetch aggregated data for the dashboard from Google Sheets and Gmail.
+    Endpoint to fetch aggregated data for the dashboard from Google Sheets.
     """
     # --- Fetch Google Sheets Data ---
     g_sheets_service = google_sheets_helpers.get_google_sheets_service()
@@ -185,14 +184,8 @@ async def get_dashboard_data(api_key: str = Depends(get_api_key)):
         settings.GOOGLE_SHEET_NAME
     )
 
-    # --- Fetch Gmail Data ---
-    email_stats = gmail_helpers.get_email_stats()
-
     # --- Combine and Return ---
-    dashboard_data = {
-        **sheet_stats,
-        **email_stats
-    }
+    dashboard_data = dict(sheet_stats)
 
     # Convert numpy int64 types to standard Python int for JSON serialization
     for key, value in dashboard_data.items():
