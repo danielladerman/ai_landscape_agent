@@ -73,21 +73,29 @@ def get_gmail_service():
         if creds and creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
+                
+                # If token is refreshed, save it to a writable temporary path for this session
+                try:
+                    temp_token_path = os.path.join("/tmp", "gmail_token.json")
+                    with open(temp_token_path, 'w') as token:
+                        token.write(creds.to_json())
+                    logging.info("Refreshed Gmail token and saved to temporary session file.")
+                except Exception as e:
+                    logging.warning(f"Could not save refreshed token to temporary file: {e}")
+
             except Exception as e:
-                logging.warning(f"Could not refresh token, forcing re-authentication: {e}")
-                creds = None # Force re-auth if refresh fails
+                logging.warning(f"Could not refresh token, re-authentication might be needed locally: {e}")
+                # Don't try to re-auth on a server; fail gracefully.
+                return None
         
         if not creds: # This block runs if no valid token exists
             if not os.path.exists(settings.GMAIL_API_CREDENTIALS_PATH):
                 logging.error(f"🔴 CRITICAL: '{os.path.basename(settings.GMAIL_API_CREDENTIALS_PATH)}' not found.")
                 logging.error("Please enable the Gmail API in Google Cloud Console and download credentials.json.")
                 return None
-            flow = InstalledAppFlow.from_client_secrets_file(settings.GMAIL_API_CREDENTIALS_PATH, SCOPES)
-            creds = flow.run_local_server(port=0)
-        
-        # Save the credentials for the next run
-        with open(settings.GMAIL_API_TOKEN_PATH, 'w') as token:
-            token.write(creds.to_json())
+            
+            logging.error("Gmail token is invalid or missing. Please re-authenticate locally to generate a valid token.json and upload it as a secret file.")
+            return None
             
     try:
         service = build('gmail', 'v1', credentials=creds)
