@@ -14,6 +14,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # Suppress noisy cache info from googleapiclient
 logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
 
+# Cache last inconsistency count to avoid spamming logs on polling
+_LAST_INCONSISTENT_COUNT = None
+
 # --- Service Authentication ---
 
 def get_google_sheets_service():
@@ -38,6 +41,7 @@ def get_sheet_as_df(service, spreadsheet_id, sheet_name):
     """
     Fetches the entire content of a Google Sheet and returns it as a pandas DataFrame.
     """
+    global _LAST_INCONSISTENT_COUNT
     if not service:
         logging.error("Google Sheets service object is invalid.")
         return None
@@ -70,8 +74,10 @@ def get_sheet_as_df(service, spreadsheet_id, sheet_name):
             else:
                 cleaned_data.append(row)
 
-        if corrected_count > 0:
-            logging.warning(f"Corrected {corrected_count} rows with inconsistent column counts to match header length ({num_columns}).")
+        if corrected_count != _LAST_INCONSISTENT_COUNT:
+            _LAST_INCONSISTENT_COUNT = corrected_count
+            if corrected_count > 0:
+                logging.warning(f"Corrected {corrected_count} rows with inconsistent column counts to match header length ({num_columns}).")
 
         return pd.DataFrame(cleaned_data, columns=header)
     except Exception as e:

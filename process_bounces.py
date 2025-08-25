@@ -7,6 +7,7 @@ from src import google_sheets_helpers
 from config.config import settings # Import the centralized settings
 
 # --- Logging Setup ---
+os.makedirs("logs", exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
