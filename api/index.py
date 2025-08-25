@@ -18,9 +18,11 @@ import logging
 from collections import deque
 from datetime import datetime
 from src import google_sheets_helpers
+from src import gmail_helpers
 from config.config import settings
 import base64
 from fastapi.security import APIKeyHeader
+import numpy as np
 
 # --- Security ---
 API_KEY_NAME = "X-API-KEY"
@@ -166,6 +168,42 @@ async def get_status():
 async def get_logs():
     """Endpoint to fetch the latest logs for the frontend."""
     return JSONResponse(content={"logs": list(log_buffer)})
+
+@app.get("/dashboard-data")
+async def get_dashboard_data(api_key: str = Depends(get_api_key)):
+    """
+    Endpoint to fetch aggregated data for the dashboard from Google Sheets and Gmail.
+    """
+    # --- Fetch Google Sheets Data ---
+    g_sheets_service = google_sheets_helpers.get_google_sheets_service()
+    if not g_sheets_service:
+        raise HTTPException(status_code=500, detail="Failed to connect to Google Sheets API.")
+    
+    sheet_stats = google_sheets_helpers.get_sheet_summary_stats(
+        g_sheets_service, 
+        settings.SPREADSHEET_ID, 
+        settings.GOOGLE_SHEET_NAME
+    )
+
+    # --- Fetch Gmail Data ---
+    email_stats = gmail_helpers.get_email_stats()
+
+    # --- Combine and Return ---
+    dashboard_data = {
+        **sheet_stats,
+        **email_stats
+    }
+
+    # Convert numpy int64 types to standard Python int for JSON serialization
+    for key, value in dashboard_data.items():
+        if isinstance(value, dict):
+            for inner_key, inner_value in value.items():
+                if isinstance(inner_value, np.int64):
+                    value[inner_key] = int(inner_value)
+        if isinstance(value, np.int64):
+            dashboard_data[key] = int(value)
+    
+    return JSONResponse(content=dashboard_data)
 
 if __name__ == "__main__":
     print("Starting web server for local development at http://127.0.0.1:8000")

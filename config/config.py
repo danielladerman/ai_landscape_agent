@@ -54,9 +54,9 @@ class Settings(BaseSettings):
     # These paths are derived from the project's base directory.
     BASE_DIR: str = BASE_DIR
     PROSPECTS_DATA_PATH: str = os.path.join(BASE_DIR, 'data', 'master_prospect_list.csv')
-    GOOGLE_CREDENTIALS_PATH: str = os.path.join(BASE_DIR, 'google_credentials.json')
-    GMAIL_API_CREDENTIALS_PATH: str = os.path.join(BASE_DIR, 'credentials.json')
-    GMAIL_API_TOKEN_PATH: str = os.path.join(BASE_DIR, 'token.json')
+    GOOGLE_CREDENTIALS_PATH: str = os.path.join(BASE_DIR, 'config', 'google_credentials.json')
+    GMAIL_API_CREDENTIALS_PATH: str = os.path.join(BASE_DIR, 'config', 'credentials.json')
+    GMAIL_API_TOKEN_PATH: str = os.path.join(BASE_DIR, 'config', 'token.json')
 
     # --- Optional & Defaulted Settings ---
     # These settings have sensible defaults but can be overridden via the .env file.

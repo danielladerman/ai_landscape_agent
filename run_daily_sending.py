@@ -5,7 +5,7 @@ import re # Import the regex module
 import os
 from datetime import datetime
 from config.config import settings
-from src.google_sheets_helpers import get_google_sheets_service, get_sheet_as_df, update_sent_status_bulk, update_bounced_status_bulk, add_tracking_columns
+from src.google_sheets_helpers import get_google_sheets_service, get_sheet_as_df, update_sent_status_bulk
 from src.email_sending import email_sender
 
 # --- Logging Setup ---
@@ -40,8 +40,6 @@ def run_daily_sending(max_emails: int):
     if not service:
         logging.error("🔴 Could not connect to Google Sheets. Aborting.")
         return
-
-    add_tracking_columns(service, settings.SPREADSHEET_ID, settings.GOOGLE_SHEET_NAME)
 
     df = get_sheet_as_df(service, settings.SPREADSHEET_ID, settings.GOOGLE_SHEET_NAME)
     if df is None or df.empty:
@@ -91,10 +89,10 @@ def run_daily_sending(max_emails: int):
         )
 
         if success:
-            successful_sends.append(name)
+            successful_sends.append(recipient)
         else:
             logging.warning(f"Failed to send email to {name}. Marking as bounced.")
-            failed_sends[name] = 'Sending Failed'
+            failed_sends[recipient] = 'Sending Failed'
         
     # --- Bulk Update Google Sheet ---
     if successful_sends:
@@ -102,16 +100,7 @@ def run_daily_sending(max_emails: int):
             service,
             settings.SPREADSHEET_ID,
             settings.GOOGLE_SHEET_NAME,
-            prospect_names=successful_sends,
-            column_name='sent_date'
-        )
-
-    if failed_sends:
-        update_bounced_status_bulk(
-            service,
-            settings.SPREADSHEET_ID,
-            settings.GOOGLE_SHEET_NAME,
-            bounced_prospects=failed_sends # Pass the dict here
+            prospect_updates=successful_sends
         )
 
     logging.info(f"--- DAILY SENDING COMPLETE: Successfully sent {len(successful_sends)} emails. ---")

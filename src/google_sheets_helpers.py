@@ -1,554 +1,402 @@
-import gspread
-from gspread_dataframe import set_with_dataframe
-import pandas as pd
-from config.config import settings
 import logging
-from google.oauth2.service_account import Credentials
+import os
+import pandas as pd
+from io import StringIO
+from datetime import datetime
+
 from googleapiclient.discovery import build
+from google.oauth2.service_account import Credentials
+
+from config.config import settings
 
 # --- Setup ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def get_google_sheets_service():
-    """Authenticates and returns a service object for the Google Sheets API."""
-    try:
-        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        creds = Credentials.from_service_account_file(settings.GOOGLE_CREDENTIALS_PATH, scopes=scopes)
-        # We use gspread for most operations, but this setup is good practice
-        return gspread.service_account(filename=settings.GOOGLE_CREDENTIALS_PATH)
-    except FileNotFoundError:
-        logging.error(f"🔴 Google credentials file not found at: {settings.GOOGLE_CREDENTIALS_PATH}")
-        return None
-    except Exception as e:
-        logging.error(f"🔴 Error initializing Google Sheets service: {e}")
-        return None
+# --- Service Authentication ---
 
-def get_raw_sheets_service():
-    """Authenticates and returns a raw service object for the Google Sheets API."""
+def get_google_sheets_service():
+    """
+    Authenticates with the Google Sheets API using service account credentials
+    and returns a service object. This is the primary way to interact with the API.
+    """
     try:
         scopes = ['https://www.googleapis.com/auth/spreadsheets']
         creds = Credentials.from_service_account_file(settings.GOOGLE_CREDENTIALS_PATH, scopes=scopes)
         service = build('sheets', 'v4', credentials=creds)
         return service
+    except FileNotFoundError:
+        logging.error(f"🔴 CRITICAL: Google credentials file not found at '{settings.GOOGLE_CREDENTIALS_PATH}'.")
     except Exception as e:
-        logging.error(f"🔴 Error initializing raw Google Sheets service: {e}")
-        return None
+        logging.error(f"🔴 Error initializing Google Sheets service: {e}")
+    return None
 
-def get_worksheet(service, spreadsheet_id, sheet_name):
-    """Opens the Google Sheet and returns the first worksheet."""
-    try:
-        spreadsheet = service.open_by_key(spreadsheet_id)
-        worksheet = spreadsheet.worksheet(sheet_name)
-        return worksheet
-    except gspread.exceptions.SpreadsheetNotFound:
-        logging.error(f"🔴 GSpread Error: Spreadsheet not found. Check your SPREADSHEET_ID in the .env file.")
-        return None
-    except gspread.exceptions.WorksheetNotFound:
-        logging.error(f"🔴 GSpread Error: Worksheet '{sheet_name}' not found. Check your GOOGLE_SHEET_NAME in the .env file.")
-        return None
-    except Exception as e:
-        logging.error(f"🔴 An unexpected error occurred while accessing the sheet: {e}")
-        return None
-
-def get_existing_websites_from_sheet(service, spreadsheet_id: str, sheet_name: str) -> set:
-    """
-    Efficiently fetches only the 'Website' column from the sheet to check for existing prospects.
-    This avoids downloading the entire sheet into memory.
-    """
-    try:
-        worksheet = get_worksheet(service, spreadsheet_id, sheet_name)
-        if not worksheet:
-            return set()
-        
-        # Assuming 'Website' is the second column (index 2)
-        # gspread uses 1-based indexing for columns
-        website_column_index = 2 
-        websites = worksheet.col_values(website_column_index)
-        
-        # Return a set for efficient O(1) average time complexity lookups
-        # Skip the header row by slicing from the first element
-        return set(websites[1:])
-    except Exception as e:
-        logging.error(f"🔴 Error fetching existing websites from sheet: {e}")
-        return set()
-
-def get_existing_phones_from_sheet(service, spreadsheet_id: str, sheet_name: str) -> set:
-    """
-    Efficiently fetches only the 'Phone Number' column from the sheet to check for existing prospects.
-    """
-    try:
-        worksheet = get_worksheet(service, spreadsheet_id, sheet_name)
-        if not worksheet:
-            return set()
-
-        header_row = worksheet.row_values(1)
-        if 'phone_number' not in header_row:
-            logging.warning("Column 'phone_number' not found in the sheet. Cannot check for duplicate phones.")
-            return set()
-
-        phone_column_index = header_row.index('phone_number') + 1
-        phones = worksheet.col_values(phone_column_index)
-
-        return set(phones[1:])
-    except Exception as e:
-        logging.error(f"🔴 Error fetching existing phone numbers from sheet: {e}")
-        return set()
-
-def get_all_prospects(service, spreadsheet_id, sheet_name):
-    """Fetches all prospects from the specified sheet and returns them as a DataFrame."""
-    worksheet = get_worksheet(service, spreadsheet_id, sheet_name)
-    if not worksheet:
-        return None
-    try:
-        data = worksheet.get_all_records()
-        return pd.DataFrame(data)
-    except Exception as e:
-        logging.error(f"🔴 Error fetching prospects from Google Sheet: {e}")
-        return None
-
-def update_prospect_list(service, spreadsheet_id, sheet_name, df):
-    """Updates the Google Sheet with the new prospects DataFrame."""
-    worksheet = get_worksheet(service, spreadsheet_id, sheet_name)
-    if not worksheet:
-        return False
-    try:
-        existing_headers = worksheet.row_values(1)
-        if not existing_headers:
-            # If sheet is empty, write with headers
-            set_with_dataframe(worksheet, df, resize=True)
-        else:
-            # Append rows without headers
-            worksheet.append_rows(df.values.tolist(), value_input_option='USER_ENTERED')
-        logging.info(f"✅ Successfully updated Google Sheet with {len(df)} new prospects.")
-        return True
-    except Exception as e:
-        logging.error(f"🔴 Error updating prospect list in Google Sheet: {e}")
-        return False
+# --- Data Retrieval ---
 
 def get_sheet_as_df(service, spreadsheet_id, sheet_name):
     """
-    Reads the entire Google Sheet and returns it as a pandas DataFrame.
+    Fetches the entire content of a Google Sheet and returns it as a pandas DataFrame.
     """
-    worksheet = get_worksheet(service, spreadsheet_id, sheet_name)
-    if not worksheet:
+    if not service:
+        logging.error("Google Sheets service object is invalid.")
         return None
     try:
-        data = worksheet.get_all_records()
-        return pd.DataFrame(data)
-    except Exception as e:
-        print(f"🔴 Error reading from Google Sheet: {e}")
-        return None
-
-def append_df_to_sheet(service, spreadsheet_id, sheet_name, df):
-    """
-    Appends a DataFrame to the end of the worksheet without clearing it.
-    """
-    worksheet = get_worksheet(service, spreadsheet_id, sheet_name)
-    if not worksheet:
-        return False
-    try:
-        # Before appending, convert any list-like cells to strings
-        for col in df.columns:
-            if df[col].apply(type).eq(list).any():
-                df[col] = df[col].apply(lambda x: ', '.join(map(str, x)) if isinstance(x, list) else x)
-
-        # Get existing headers
-        header_row = []
-        try:
-            header_row = worksheet.row_values(1)
-        except gspread.exceptions.APIError:
-            # Sheet is likely empty, which is fine
-            pass
-
-        # If the sheet is empty, write with header. Otherwise, append without header.
-        if not header_row:
-            set_with_dataframe(worksheet, df, resize=True)
-        else:
-            # --- ROBUST APPEND LOGIC ---
-            # 1. Create a new, empty DataFrame with columns in the exact order of the sheet's headers.
-            aligned_df = pd.DataFrame(columns=header_row)
-            
-            # 2. Concatenate the new data (df). This aligns df's columns to the header_row order.
-            #    Columns in df that are not in header_row will be ignored.
-            #    Columns in header_row that are not in df will be present but filled with NaN.
-            combined_df = pd.concat([aligned_df, df], ignore_index=True)
-            
-            # 3. Select only the columns that exist in the sheet to prepare for upload.
-            upload_df = combined_df[header_row]
-            
-            # 4. Convert the ordered data to a list of lists for the API call.
-            #    Fill any NaN values with empty strings to avoid issues with the API.
-            rows_to_append = upload_df.fillna('').values.tolist()
-
-            worksheet.append_rows(rows_to_append, value_input_option='USER_ENTERED')
-
-        logging.info(f"✅ Successfully appended {len(df)} new rows to Google Sheet.")
-        return True
-    except Exception as e:
-        logging.error(f"🔴 Error appending to Google Sheet: {e}")
-        return False
-
-def update_sent_status(service, spreadsheet_id, sheet_name, prospect_name, column_name):
-    """
-    Finds a prospect by their unique name and updates the status of a specific column.
-    """
-    worksheet = get_worksheet(service, spreadsheet_id, sheet_name)
-    if not worksheet:
-        return False
-    try:
-        # Find the cell with the prospect's name in the second column ('Name')
-        cell = worksheet.find(prospect_name, in_column=2)
-        
-        if not cell:
-            logging.warning(f"Could not find prospect with name '{prospect_name}' to update status.")
-            return False
-
-        found_row = cell.row
-
-        # Find the column index for the status update
-        header_row = worksheet.row_values(1)
-        if column_name not in header_row:
-            logging.error(f"Column '{column_name}' not found in the sheet.")
-            return False
-        
-        col_index = header_row.index(column_name) + 1
-        
-        # Update the cell in that row with today's date
-        timestamp = pd.Timestamp.now().strftime('%Y-%m-%d')
-        worksheet.update_cell(found_row, col_index, timestamp)
-
-        # Also update the 'last_contact_date'
-        if 'last_contact_date' in header_row:
-            last_contact_col_index = header_row.index('last_contact_date') + 1
-            worksheet.update_cell(found_row, last_contact_col_index, timestamp)
-
-        logging.info(f"✅ Updated '{column_name}' for {prospect_name}.")
-        return True
-
-    except Exception as e:
-        logging.error(f"🔴 Error updating sent status for {prospect_name}: {e}")
-        return False
-
-def update_follow_up_status(service, spreadsheet_id, sheet_name, prospect_name, stage):
-    """
-    Finds a prospect by name and updates the correct follow-up sent date column.
-    """
-    worksheet = get_worksheet(service, spreadsheet_id, sheet_name)
-    if not worksheet:
-        return False
-
-    column_to_update = f'follow_up_{stage}_sent_date'
-    
-    try:
-        # Find the cell with the prospect's name in the second column ('Name')
-        cell = worksheet.find(prospect_name, in_column=2) 
-        if not cell:
-            logging.warning(f"Could not find prospect '{prospect_name}' to update follow-up status.")
-            return False
-
-        header_row = worksheet.row_values(1)
-        if column_to_update not in header_row:
-            logging.error(f"Column '{column_to_update}' not found in the sheet.")
-            return False
-            
-        col_index = header_row.index(column_to_update) + 1
-        timestamp = pd.Timestamp.now().strftime('%Y-%m-%d')
-        worksheet.update_cell(cell.row, col_index, timestamp)
-
-        # Also update the 'last_contact_date'
-        if 'last_contact_date' in header_row:
-            last_contact_col_index = header_row.index('last_contact_date') + 1
-            worksheet.update_cell(cell.row, last_contact_col_index, timestamp)
-
-        logging.info(f"✅ Updated follow-up stage {stage} for {prospect_name}.")
-        return True
-    except Exception as e:
-        logging.error(f"🔴 Error updating follow-up status for {prospect_name}: {e}")
-        return False
-
-def update_prospect_status(service, spreadsheet_id, sheet_name, prospect_name, column_name, status_value):
-    """
-    Finds a prospect by their unique name and updates a specific column with a given value.
-    """
-    worksheet = get_worksheet(service, spreadsheet_id, sheet_name)
-    if not worksheet:
-        return False
-    try:
-        # Find the cell with the prospect's name
-        # Assuming 'name' is in the second column (B)
-        cell = worksheet.find(prospect_name, in_column=2)
-        if not cell:
-            logging.warning(f"Could not find prospect '{prospect_name}' to update status.")
-            return False
-
-        header_row = worksheet.row_values(1)
-        if column_name not in header_row:
-            logging.error(f"Column '{column_name}' not found in the sheet.")
-            return False
-
-        col_index = header_row.index(column_name) + 1
-        worksheet.update_cell(cell.row, col_index, status_value)
-        logging.info(f"✅ Updated '{column_name}' to '{status_value}' for {prospect_name}.")
-        return True
-    except Exception as e:
-        logging.error(f"🔴 Error updating prospect status for {prospect_name}: {e}")
-        return False
-
-def update_sent_status_bulk(service, spreadsheet_id, sheet_name, prospect_names: list, column_name: str):
-    """
-    Updates a specific column for a list of prospects using a brute-force
-    read-modify-write approach with the raw Google Sheets API to guarantee changes.
-    """
-    logging.info("Attempting DIRECT API brute-force sheet update to guarantee changes...")
-    gspread_service = get_google_sheets_service() # For reading
-    raw_service = get_raw_sheets_service() # For writing
-    if not gspread_service or not raw_service:
-        return False
-
-    try:
-        worksheet = get_worksheet(gspread_service, spreadsheet_id, sheet_name)
-        if not worksheet:
-            return False
-
-        all_records = worksheet.get_all_records()
-        if not all_records: return True
-        df = pd.DataFrame(all_records)
-
-        # Use a vectorized operation with .isin() for a robust, single-shot update
-        timestamp = pd.Timestamp.now().strftime('%Y-%m-%d')
-        mask = df['name'].isin(prospect_names)
-        updated_count = mask.sum()
-
-        if updated_count > 0:
-            df.loc[mask, column_name] = timestamp
-            if 'last_contact_date' in df.columns:
-                df.loc[mask, 'last_contact_date'] = timestamp
-
-            # Clear the sheet first
-            raw_service.spreadsheets().values().clear(
-                spreadsheetId=spreadsheet_id,
-                range=sheet_name
-            ).execute()
-            
-            # Write the updated dataframe
-            raw_service.spreadsheets().values().update(
-                spreadsheetId=spreadsheet_id,
-                range=f"{sheet_name}!A1",
-                valueInputOption='USER_ENTERED',
-                body={'values': [df.columns.values.tolist()] + df.values.tolist()}
-            ).execute()
-            logging.info(f"✅ Successfully overwrote sheet via DIRECT API with updates for {updated_count} prospects.")
-        return True
-    except Exception as e:
-        logging.error(f"🔴 Error during DIRECT API brute-force bulk update: {e}")
-        return False
-
-def update_bounced_status_bulk(service, spreadsheet_id, sheet_name, bounced_prospects: dict):
-    """
-    Updates bounced prospects using a DIRECT API brute-force read-modify-write.
-    """
-    logging.info("Attempting DIRECT API brute-force sheet update for bounced prospects...")
-    gspread_service = get_google_sheets_service()
-    raw_service = get_raw_sheets_service()
-    if not gspread_service or not raw_service or not bounced_prospects:
-        return False
-
-    try:
-        worksheet = get_worksheet(gspread_service, spreadsheet_id, sheet_name)
-        if not worksheet: return False
-
-        all_records = worksheet.get_all_records()
-        if not all_records: return True
-        df = pd.DataFrame(all_records)
-
-        updated_count = 0
-        for email, reason in bounced_prospects.items():
-            match_index = df.index[df['verified_emails'] == email].tolist()
-            if match_index:
-                idx = match_index[0]
-                df.loc[idx, 'email_status'] = 'Bounced'
-                df.loc[idx, 'termination_reason'] = reason
-                updated_count += 1
-
-        if updated_count > 0:
-            raw_service.spreadsheets().values().clear(
-                spreadsheetId=spreadsheet_id,
-                range=sheet_name
-            ).execute()
-            raw_service.spreadsheets().values().update(
-                spreadsheetId=spreadsheet_id,
-                range=f"{sheet_name}!A1",
-                valueInputOption='USER_ENTERED',
-                body={'values': [df.columns.values.tolist()] + df.values.tolist()}
-            ).execute()
-            logging.info(f"✅ Successfully overwrote sheet via DIRECT API with updates for {updated_count} bounced prospects.")
-
-        return True
-    except Exception as e:
-        logging.error(f"🔴 Error during DIRECT API brute-force bounce update: {e}")
-        return False
-
-def deduplicate_prospects(service, spreadsheet_id, sheet_name):
-    """
-    Removes duplicate rows from the sheet based on the 'website' column, keeping the last occurrence.
-    """
-    logging.info("Attempting to deduplicate sheet by 'website' column...")
-    gspread_service = get_google_sheets_service()
-    raw_service = get_raw_sheets_service()
-    if not gspread_service or not raw_service:
-        return False
-
-    try:
-        worksheet = get_worksheet(gspread_service, spreadsheet_id, sheet_name)
-        if not worksheet: return False
-
-        all_records = worksheet.get_all_records()
-        if not all_records:
-            logging.info("Sheet is empty, no deduplication needed.")
-            return True
-        
-        df = pd.DataFrame(all_records)
-        initial_row_count = len(df)
-        
-        # Drop duplicates based on 'website' column, keeping the last entry
-        df.drop_duplicates(subset=['website'], keep='last', inplace=True)
-        final_row_count = len(df)
-        
-        num_removed = initial_row_count - final_row_count
-
-        if num_removed > 0:
-            logging.info(f"Removed {num_removed} duplicate prospect(s). Overwriting sheet with cleaned data...")
-            # Clear the sheet first
-            raw_service.spreadsheets().values().clear(
-                spreadsheetId=spreadsheet_id,
-                range=sheet_name
-            ).execute()
-            
-            # Write the updated dataframe
-            raw_service.spreadsheets().values().update(
-                spreadsheetId=spreadsheet_id,
-                range=f"{sheet_name}!A1",
-                valueInputOption='USER_ENTERED',
-                body={'values': [df.columns.values.tolist()] + df.values.tolist()}
-            ).execute()
-            logging.info(f"✅ Successfully overwrote sheet with {final_row_count} unique prospects.")
-        else:
-            logging.info("✅ No duplicate prospects found based on the 'website' column.")
-
-        return True
-    except Exception as e:
-        logging.error(f"🔴 Error during sheet deduplication: {e}")
-        return False
-
-def backfill_last_contact_dates(service, spreadsheet_id, sheet_name):
-    """
-    Backfills the 'last_contact_date' column based on the most recent timestamp
-    from other date-related columns. This is a one-time utility.
-    """
-    logging.info("Attempting to backfill 'last_contact_date' for existing prospects...")
-    gspread_service = get_google_sheets_service()
-    raw_service = get_raw_sheets_service()
-    if not gspread_service or not raw_service:
-        return False
-
-    try:
-        worksheet = get_worksheet(gspread_service, spreadsheet_id, sheet_name)
-        if not worksheet: return False
-
-        all_records = worksheet.get_all_records()
-        if not all_records:
-            logging.info("Sheet is empty, no backfill needed.")
-            return True
-        
-        df = pd.DataFrame(all_records)
-        
-        # Define the columns that track contact dates
-        date_cols = [
-            'sent_date', 'follow_up_1_sent_date', 
-            'follow_up_2_sent_date', 'follow_up_3_sent_date'
-        ]
-        
-        # Ensure all relevant date columns exist, adding them if not
-        for col in date_cols:
-            if col not in df.columns:
-                df[col] = ''
-        
-        # Convert date columns to datetime objects, coercing errors will turn non-dates into NaT
-        for col in date_cols:
-            df[col] = pd.to_datetime(df[col], errors='coerce')
-            
-        # Find the most recent date across the specified columns for each row
-        df['last_contact_date'] = df[date_cols].max(axis=1)
-        
-        # Format dates back to strings, leaving empty where no date was found
-        df['last_contact_date'] = df['last_contact_date'].dt.strftime('%Y-%m-%d').fillna('')
-        
-        # Format the other date columns back to string as well to avoid writing 'NaT'
-        for col in date_cols:
-            df[col] = df[col].dt.strftime('%Y-%m-%d').fillna('')
-        
-        logging.info("Backfill calculation complete. Overwriting sheet with updated dates...")
-        
-        # Overwrite the entire sheet with the updated data
-        raw_service.spreadsheets().values().clear(
+        result = service.spreadsheets().values().get(
             spreadsheetId=spreadsheet_id,
             range=sheet_name
         ).execute()
         
-        raw_service.spreadsheets().values().update(
-            spreadsheetId=spreadsheet_id,
-            range=f"{sheet_name}!A1",
-            valueInputOption='USER_ENTERED',
-            body={'values': [df.columns.values.tolist()] + df.values.tolist()}
-        ).execute()
+        values = result.get('values', [])
+        if not values or len(values) < 1:
+            logging.warning(f"Sheet '{sheet_name}' is empty or has no header row.")
+            return pd.DataFrame()
+            
+        header = values[0]
+        data = values[1:]
         
-        logging.info("✅ Successfully backfilled 'last_contact_date' and cleaned sheet.")
-        return True
+        # --- Data Integrity Check ---
+        # Ensure all data rows have the same number of columns as the header.
+        # This prevents crashes if the sheet has inconsistent row lengths.
+        num_columns = len(header)
+        cleaned_data = []
+        for i, row in enumerate(data):
+            if len(row) != num_columns:
+                # Pad rows that are too short
+                padded_row = row + [''] * (num_columns - len(row))
+                cleaned_data.append(padded_row[:num_columns]) # Truncate rows that are too long
+                logging.warning(f"Corrected inconsistent column count in row {i+2}. Expected {num_columns}, found {len(row)}.")
+            else:
+                cleaned_data.append(row)
 
+        return pd.DataFrame(cleaned_data, columns=header)
     except Exception as e:
-        logging.error(f"🔴 Error during 'last_contact_date' backfill: {e}")
+        logging.error(f"🔴 Error fetching sheet '{sheet_name}' as DataFrame: {e}")
+        return None
+
+def get_sheet_summary_stats(service, spreadsheet_id, sheet_name):
+    """
+    Fetches the entire sheet and calculates summary statistics for the dashboard.
+    """
+    df = get_sheet_as_df(service, spreadsheet_id, sheet_name)
+    if df is None or df.empty:
+        return {
+            "total_prospects": 0,
+            "stage_counts": {},
+            "contacted_in_last_24h": 0,
+            "error": "Sheet is empty or could not be loaded."
+        }
+
+    try:
+        # --- Calculate Stats ---
+        total_prospects = len(df)
+        
+        # Calculate stage counts if the column exists
+        stage_counts = df['Stage'].value_counts().to_dict() if 'Stage' in df.columns else {}
+
+        # Calculate contacts in the last 24 hours
+        contacted_in_last_24h = 0
+        if 'last_contact_date' in df.columns:
+            # Convert to datetime, coercing errors to NaT (Not a Time)
+            last_contact_dates = pd.to_datetime(df['last_contact_date'], errors='coerce')
+            # Get the timestamp for 24 hours ago
+            yesterday = pd.Timestamp.now() - pd.Timedelta(days=1)
+            # Count how many are more recent than yesterday
+            contacted_in_last_24h = last_contact_dates[last_contact_dates >= yesterday].count()
+
+        return {
+            "total_prospects": total_prospects,
+            "stage_counts": stage_counts,
+            "contacted_in_last_24h": contacted_in_last_24h
+        }
+    except Exception as e:
+        logging.error(f"🔴 Error calculating summary stats from DataFrame: {e}")
+        return {"error": str(e)}
+
+# --- Data Modification ---
+
+def update_cells_bulk(service, spreadsheet_id, updates):
+    """
+    Performs a batch update to modify multiple cell ranges with new values.
+    
+    Args:
+        service: The authenticated Google Sheets service object.
+        spreadsheet_id (str): The ID of the spreadsheet.
+        updates (list): A list of dictionaries, where each dict contains
+                        'range' (e.g., "Sheet1!A2") and 'values' (e.g., [["new_value"]]).
+    """
+    if not service:
+        logging.error("Google Sheets service is not available for bulk update.")
+        return
+    try:
+        body = {
+            'valueInputOption': 'USER_ENTERED',
+            'data': updates
+        }
+        service.spreadsheets().values().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body=body
+        ).execute()
+        logging.info(f"✅ Successfully performed bulk update for {len(updates)} cell(s).")
+    except Exception as e:
+        logging.error(f"🔴 Error performing batch update: {e}")
+
+
+def update_follow_up_status(service, spreadsheet_id, sheet_name, prospect_updates):
+    """
+    Updates the follow-up sent date and last contact date for multiple prospects.
+
+    Args:
+        prospect_updates (list): A list of tuples, where each tuple is
+                                 (prospect_email, stage_to_update).
+    """
+    df = get_sheet_as_df(service, spreadsheet_id, sheet_name)
+    if df is None or df.empty:
+        logging.error("Cannot update follow-up status because the sheet is empty or could not be read.")
+        return
+
+    # Create a mapping from email to row index for quick lookups
+    try:
+        # Ensure the key column exists
+        if 'verified_emails' not in df.columns:
+            logging.error("🔴 Missing 'verified_emails' column in the sheet. Cannot update follow-up status.")
+            return
+        email_to_row_map = {row['verified_emails']: index for index, row in df.iterrows()}
+    except KeyError:
+        logging.error("Could not create email-to-row mapping. Check column names.")
+        return
+
+    updates = []
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    
+    stage_column_map = {
+        1: 'follow_up_1_sent_date',
+        2: 'follow_up_2_sent_date',
+        3: 'follow_up_3_sent_date'
+    }
+
+    # Verify that all necessary columns exist in the DataFrame
+    required_cols = list(stage_column_map.values()) + ['last_contact_date']
+    for col in required_cols:
+        if col not in df.columns:
+            logging.error(f"🔴 Missing required column '{col}' in the sheet. Cannot proceed with updates.")
+            return
+            
+    for email, stage in prospect_updates:
+        if email in email_to_row_map:
+            row_index = email_to_row_map[email]
+            sheet_row_index = row_index + 2  # +1 for header, +1 for 0-based index
+
+            # --- Prepare Follow-up Date Update ---
+            follow_up_col_name = stage_column_map.get(stage)
+            if follow_up_col_name:
+                col_index = df.columns.get_loc(follow_up_col_name)
+                col_letter = chr(ord('A') + col_index)
+                updates.append({
+                    'range': f"{sheet_name}!{col_letter}{sheet_row_index}",
+                    'values': [[today_str]]
+                })
+
+            # --- Prepare Last Contact Date Update ---
+            col_index = df.columns.get_loc('last_contact_date')
+            col_letter = chr(ord('A') + col_index)
+            updates.append({
+                'range': f"{sheet_name}!{col_letter}{sheet_row_index}",
+                'values': [[today_str]]
+            })
+        else:
+            logging.warning(f"Could not find prospect with email '{email}' to update follow-up status.")
+
+    if updates:
+        update_cells_bulk(service, spreadsheet_id, updates)
+
+
+def update_sent_status_bulk(service, spreadsheet_id, sheet_name, prospect_updates):
+    """
+    Updates the sent date and last contact date for multiple prospects.
+
+    Args:
+        prospect_updates (list): A list of prospect emails that were successfully contacted.
+    """
+    df = get_sheet_as_df(service, spreadsheet_id, sheet_name)
+    if df is None or df.empty:
+        logging.error("Cannot update sent status because the sheet is empty or could not be read.")
+        return
+
+    try:
+        if 'verified_emails' not in df.columns:
+            logging.error("🔴 Missing 'verified_emails' column. Cannot update sent status.")
+            return
+        email_to_row_map = {row['verified_emails']: index for index, row in df.iterrows()}
+    except KeyError:
+        logging.error("Could not create email-to-row mapping for sent status update.")
+        return
+
+    updates = []
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    
+    required_cols = ['sent_date', 'last_contact_date']
+    for col in required_cols:
+        if col not in df.columns:
+            logging.error(f"🔴 Missing required column '{col}'. Cannot proceed with sent status update.")
+            return
+            
+    for email in prospect_updates:
+        if email in email_to_row_map:
+            row_index = email_to_row_map[email]
+            sheet_row_index = row_index + 2
+
+            # Prepare 'sent_date' update
+            col_index = df.columns.get_loc('sent_date')
+            col_letter = chr(ord('A') + col_index)
+            updates.append({
+                'range': f"{sheet_name}!{col_letter}{sheet_row_index}",
+                'values': [[today_str]]
+            })
+
+            # Prepare 'last_contact_date' update
+            col_index = df.columns.get_loc('last_contact_date')
+            col_letter = chr(ord('A') + col_index)
+            updates.append({
+                'range': f"{sheet_name}!{col_letter}{sheet_row_index}",
+                'values': [[today_str]]
+            })
+        else:
+            logging.warning(f"Could not find prospect with email '{email}' to update sent status.")
+
+    if updates:
+        update_cells_bulk(service, spreadsheet_id, updates)
+
+
+def update_bounced_status_bulk(service, spreadsheet_id, sheet_name, bounced_updates):
+    """
+    Updates the email status and termination reason for multiple bounced emails.
+
+    Args:
+        bounced_updates (dict): A dictionary where keys are prospect emails and
+                                values are the reason for the bounce.
+    """
+    df = get_sheet_as_df(service, spreadsheet_id, sheet_name)
+    if df is None or df.empty:
+        logging.error("Cannot update bounced status because the sheet is empty or could not be read.")
+        return
+
+    try:
+        if 'verified_emails' not in df.columns:
+            logging.error("🔴 Missing 'verified_emails' column. Cannot update bounced status.")
+            return
+        email_to_row_map = {row['verified_emails']: index for index, row in df.iterrows()}
+    except KeyError:
+        logging.error("Could not create email-to-row mapping for bounced status update.")
+        return
+
+    updates = []
+    
+    required_cols = ['email_status', 'termination_reason']
+    for col in required_cols:
+        if col not in df.columns:
+            logging.error(f"🔴 Missing required column '{col}'. Cannot proceed with bounced status update.")
+            return
+            
+    for email, reason in bounced_updates.items():
+        if email in email_to_row_map:
+            row_index = email_to_row_map[email]
+            sheet_row_index = row_index + 2
+
+            # Prepare 'email_status' update
+            col_index = df.columns.get_loc('email_status')
+            col_letter = chr(ord('A') + col_index)
+            updates.append({
+                'range': f"{sheet_name}!{col_letter}{sheet_row_index}",
+                'values': [['Bounced']]
+            })
+
+            # Prepare 'termination_reason' update
+            col_index = df.columns.get_loc('termination_reason')
+            col_letter = chr(ord('A') + col_index)
+            updates.append({
+                'range': f"{sheet_name}!{col_letter}{sheet_row_index}",
+                'values': [[reason]]
+            })
+        else:
+            logging.warning(f"Could not find prospect with email '{email}' to update bounced status.")
+
+    if updates:
+        update_cells_bulk(service, spreadsheet_id, updates)
+
+
+def append_df_to_sheet(service, spreadsheet_id, sheet_name, df_to_append):
+    """
+    Appends a DataFrame to the specified Google Sheet.
+    """
+    if not service:
+        logging.error("Google Sheets service is not available for appending.")
+        return False
+    try:
+        # Get the existing data from the sheet to determine the last row
+        existing_values = service.spreadsheets().values().get(
+            spreadsheetId=spreadsheet_id,
+            range=sheet_name
+        ).execute().get('values', [])
+
+        body = {
+            'values': df_to_append.values.tolist()
+        }
+        
+        service.spreadsheets().values().append(
+            spreadsheetId=spreadsheet_id,
+            range=f"{sheet_name}!A{len(existing_values) + 1}",
+            valueInputOption='USER_ENTERED',
+            insertDataOption='INSERT_ROWS',
+            body=body
+        ).execute()
+        logging.info(f"✅ Successfully appended {len(df_to_append)} new rows to the sheet.")
+        return True
+    except Exception as e:
+        logging.error(f"🔴 Error appending to sheet: {e}")
         return False
 
-def add_tracking_columns(service, spreadsheet_id, sheet_name):
+
+def deduplicate_prospects(service, spreadsheet_id, sheet_name):
     """
-    Checks if all required tracking columns exist in the sheet and adds them if they don't.
+    Removes duplicate rows from the sheet based on the 'name' column.
     """
-    required_columns = [
-        'name', 'website', 'verified_emails', 'found_titles', 
-        'icebreaker', 'identified_pains', 'proposed_solutions', 'evidence',
-        'generated_subject', 'generated_body',
-        'sent_date', 'last_contact_date', 'email_status', 'termination_reason',
-        'follow_up_1_sent_date', 'follow_up_2_sent_date', 'follow_up_3_sent_date'
-    ]
+    df = get_sheet_as_df(service, spreadsheet_id, sheet_name)
+    if df is None or df.empty:
+        logging.info("Sheet is empty, no deduplication needed.")
+        return
+
+    if 'name' not in df.columns:
+        logging.error("🔴 Cannot deduplicate because 'name' column is missing.")
+        return
+
+    initial_row_count = len(df)
+    df.drop_duplicates(subset=['name'], keep='first', inplace=True)
+    deduplicated_row_count = len(df)
     
-    try:
-        worksheet = get_worksheet(service, spreadsheet_id, sheet_name)
-        if not worksheet:
-            return
+    num_removed = initial_row_count - deduplicated_row_count
 
-        header_row = worksheet.row_values(1)
+    if num_removed > 0:
+        logging.info(f"Removed {num_removed} duplicate prospect(s).")
         
-        # Find which columns are missing
-        missing_columns = [col for col in required_columns if col not in header_row]
+        # Overwrite the entire sheet with the deduplicated data
+        try:
+            # Clear the existing sheet content
+            service.spreadsheets().values().clear(
+                spreadsheetId=spreadsheet_id,
+                range=sheet_name
+            ).execute()
 
-        if missing_columns:
-            logging.info(f"Adding missing columns to Google Sheet: {', '.join(missing_columns)}")
-            
-            # Find the starting column to append to
-            start_column = len(header_row) + 1
-            
-            # Prepare the update request
-            # Note: The values must be a list of lists
-            cell_list = worksheet.range(1, start_column, 1, start_column + len(missing_columns) - 1)
-            for i, cell in enumerate(cell_list):
-                cell.value = missing_columns[i]
-            
-            # Update the cells in a single batch
-            worksheet.update_cells(cell_list)
-            logging.info(f"✅ Successfully added {len(missing_columns)} new columns to the header.")
-
-        else:
-            logging.info("✅ Sheet columns are up to date.")
-            
-    except Exception as e:
-        logging.error(f"🔴 Error checking or adding tracking columns: {e}") 
+            # Write the deduplicated DataFrame back to the sheet
+            body = {
+                'values': [df.columns.values.tolist()] + df.values.tolist()
+            }
+            service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range=f"{sheet_name}!A1",
+                valueInputOption='USER_ENTERED',
+                body=body
+            ).execute()
+            logging.info("✅ Successfully overwrote sheet with deduplicated data.")
+        except Exception as e:
+            logging.error(f"🔴 Error overwriting sheet with deduplicated data: {e}")
+    else:
+        logging.info("No duplicate prospects found.") 

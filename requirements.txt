@@ -57,12 +57,12 @@ frozenlist==1.7.0
 fsspec==2025.5.1
 future @ file:///AppleInternal/Library/BuildRoots/39d9dc1a-2111-11f0-be06-226177e5bb69/Library/Caches/com.apple.xbs/Sources/python3/future-0.18.2-py3-none-any.whl
 google-api-core==2.25.1
-google-api-python-client==2.179.0
+google-api-python-client==2.128.0
 google-auth==2.40.3
 google-auth-httplib2==0.2.0
 google-auth-oauthlib==1.2.2
 google-cloud-vision==3.10.2
-googleapis-common-protos==1.70.0
+googleapis-common-protos==1.63.1
 googlemaps==4.10.0
 gradio==4.44.1
 gradio_client==1.3.0
@@ -167,8 +167,8 @@ PyAudio==0.2.14
 pybase64==1.4.1
 pycocotools==2.0.10
 pycparser==2.22
-pydantic==2.11.7
-pydantic-settings==2.10.1
+pydantic==2.7.1
+pydantic_settings==2.2.1
 pydantic_core==2.33.2
 pydub==0.25.1
 Pygments==2.19.2
@@ -187,7 +187,7 @@ pytest-socket==0.7.0
 python-dateutil==2.9.0.post0
 python-decouple==3.8
 python-docx==1.2.0
-python-dotenv==1.1.1
+python-dotenv==1.0.1
 python-iso639==2025.2.18
 python-magic==0.4.27
 python-multipart==0.0.20

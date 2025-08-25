@@ -88,6 +88,42 @@
         .master-status-indicator[data-status="error"] { color: var(--status_error); background-color: rgba(220, 53, 69, 0.1); }
 
 
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 20px;
+            background-color: var(--background_secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--border_radius);
+        }
+
+        .stat-card {
+            background-color: var(--card_background);
+            padding: 20px;
+            border-radius: var(--border_radius);
+            border: 1px solid transparent;
+        }
+
+        .stat-card h3 {
+            font-size: 14px;
+            color: var(--text_secondary);
+            margin: 0 0 10px;
+            font-weight: 500;
+        }
+
+        .stat-card .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--text_primary);
+        }
+        
+        .stat-card .stat-details {
+            font-size: 12px;
+            color: var(--text_secondary);
+            margin-top: 10px;
+        }
+
         .action-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -283,6 +319,10 @@
             </div>
         </header>
 
+        <section id="dashboard-section" class="dashboard-grid">
+            <!-- Stat cards will be dynamically inserted here -->
+        </section>
+
         <section class="action-grid">
             
             <!-- Card 1: Build Prospect List -->
@@ -367,11 +407,6 @@
                             Process Bounces
                         </button>
                     </form>
-                    <form data-script-name="deduplicate_sheet">
-                         <button type="submit" class="card-button">
-                            Deduplicate Sheet
-                        </button>
-                    </form>
                 </div>
             </div>
         </section>
@@ -404,13 +439,15 @@
                 apiKey: "{{ api_key }}",
                 state: {
                     statuses: {},
-                    logs: []
+                    logs: [],
+                    dashboardData: {}
                 },
                 elements: {
                     cards: document.querySelectorAll('.action-card[data-script-name]'),
                     forms: document.querySelectorAll('form'),
                     logContainer: document.getElementById('log-container'),
-                    masterStatus: document.getElementById('master-status')
+                    masterStatus: document.getElementById('master-status'),
+                    dashboardSection: document.getElementById('dashboard-section')
                 },
 
                 init() {
@@ -458,26 +495,29 @@
                 },
 
                 startPolling() {
-                    setInterval(async () => {
+                    const fetchData = async () => {
                         try {
-                            const [statusRes, logsRes] = await Promise.all([
+                            const [statusRes, logsRes, dashboardRes] = await Promise.all([
                                 fetch('/status'),
-                                fetch('/logs')
+                                fetch('/logs'),
+                                fetch('/dashboard-data', { headers: { 'X-API-KEY': this.apiKey } })
                             ]);
                             
-                            const newStatuses = await statusRes.json();
-                            const newLogsData = await logsRes.json();
-                            
-                            this.state.statuses = newStatuses;
-                            this.state.logs = newLogsData.logs;
+                            this.state.statuses = await statusRes.json();
+                            this.state.logs = (await logsRes.json()).logs;
+                            this.state.dashboardData = await dashboardRes.json();
 
                             this.updateUI();
                             this.renderLogs();
+                            this.renderDashboard();
 
                         } catch (error) {
                             console.error('Polling error:', error);
                         }
-                    }, 2000);
+                    };
+                    
+                    fetchData(); // Initial call
+                    setInterval(fetchData, 5000); // Poll every 5 seconds
                 },
 
                 updateUI() {
@@ -564,6 +604,39 @@
                         this.elements.logContainer.appendChild(lineEl);
                     });
                     this.elements.logContainer.scrollTop = this.elements.logContainer.scrollHeight;
+                },
+                
+                renderDashboard() {
+                    const data = this.state.dashboardData;
+                    if (!data || data.error) {
+                        this.elements.dashboardSection.innerHTML = '<p>Could not load dashboard data.</p>';
+                        return;
+                    }
+
+                    const stageCounts = data.stage_counts || {};
+                    const positiveReplies = stageCounts['Positive Reply'] || 0;
+
+                    const stats = [
+                        { title: 'Total Prospects', value: data.total_prospects, details: 'All leads in the sheet.' },
+                        { title: 'Positive Replies', value: positiveReplies, details: 'Marked as "Positive Reply".' },
+                        { title: 'Emails Sent (24h)', value: data.emails_sent_24h, details: 'Sent from your account.' },
+                        { title: 'Replies (24h)', value: data.replies_received_24h, details: 'Approximation of replies.' },
+                        { title: 'Bounces (24h)', value: data.bounces_24h, details: 'Failed deliveries.' },
+                        { title: 'Contacted (24h)', value: data.contacted_in_last_24h, details: 'Updated in the sheet.' }
+                    ];
+
+                    let html = '';
+                    stats.forEach(stat => {
+                        html += `
+                            <div class="stat-card">
+                                <h3>${stat.title}</h3>
+                                <div class="stat-value">${stat.value !== undefined ? stat.value : 'N/A'}</div>
+                                <div class="stat-details">${stat.details || ''}</div>
+                            </div>
+                        `;
+                    });
+
+                    this.elements.dashboardSection.innerHTML = html;
                 }
             };
 

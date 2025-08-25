@@ -127,7 +127,7 @@ def process_bounces():
                 g_service,
                 settings.SPREADSHEET_ID,
                 settings.GOOGLE_SHEET_NAME,
-                bounced_recipients_info  # Pass the dictionary
+                bounced_updates=bounced_recipients_info  # Pass the dictionary
             )
         else:
             logging.error("Could not get Google Sheets service to update bounce statuses.")

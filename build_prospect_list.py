@@ -13,7 +13,7 @@ from src.verification import email_verifier
 from src.review_analysis import review_analyzer
 from src.pain_analysis import pain_point_detector
 from src.email_generation import email_generator
-from src.google_sheets_helpers import get_google_sheets_service, get_sheet_as_df, append_df_to_sheet, add_tracking_columns, get_existing_websites_from_sheet, get_existing_phones_from_sheet
+from src.google_sheets_helpers import get_google_sheets_service, get_sheet_as_df, append_df_to_sheet
 
 # --- Setup ---
 # Ensure the logs directory exists before setting up logging
@@ -88,11 +88,15 @@ def build_prospect_list(query: str, max_leads: int = 100, max_workers: int = 10)
         logging.error("🔴 Failed to initialize Google Sheets service. Aborting.")
         return
 
-    add_tracking_columns(service, settings.SPREADSHEET_ID, settings.GOOGLE_SHEET_NAME)
-    
     # Efficiently get existing data to avoid duplicates
-    existing_websites = get_existing_websites_from_sheet(service, settings.SPREADSHEET_ID, settings.GOOGLE_SHEET_NAME)
-    existing_phones = get_existing_phones_from_sheet(service, settings.SPREADSHEET_ID, settings.GOOGLE_SHEET_NAME)
+    df = get_sheet_as_df(service, settings.SPREADSHEET_ID, settings.GOOGLE_SHEET_NAME)
+    if df is not None and not df.empty:
+        existing_websites = set(df['website'].dropna())
+        existing_phones = set(df['phone_number'].dropna())
+    else:
+        existing_websites = set()
+        existing_phones = set()
+        
     logging.info(f"Found {len(existing_websites)} existing websites and {len(existing_phones)} existing phone numbers in the tracker.")
 
     # --- PHASE 2: Lead Generation & Contact Finding ---
@@ -161,7 +165,10 @@ def build_prospect_list(query: str, max_leads: int = 100, max_workers: int = 10)
             try:
                 result = future.result()
                 if result:
-                    # The 'sent_date' will be added by the sending script, not here.
+                    # Convert all list-like fields to JSON strings for sheet compatibility
+                    for key, value in result.items():
+                        if isinstance(value, list):
+                            result[key] = json.dumps(value)
                     final_prospects_data.append(result)
                 time.sleep(1) # Add a 1-second delay to avoid rate limiting
             except Exception as e:

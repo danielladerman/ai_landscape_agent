@@ -90,7 +90,8 @@ def run_follow_up_campaign(daily_limit: int):
     logging.info(f"Found {len(prospects_to_email)} prospects due for a follow-up.")
 
     # --- Generate and Send Emails ---
-    send_count = 0
+    successful_sends = [] # List of (email, stage) tuples
+
     for prospect in prospects_to_email:
         prospect_dict = prospect.to_dict()
         stage = prospect_dict['follow_up_stage']
@@ -165,17 +166,21 @@ def run_follow_up_campaign(daily_limit: int):
 
         # 3. Update the Google Sheet if sending was successful
         if success:
-            google_sheets_helpers.update_follow_up_status(
-                service, 
-                settings.SPREADSHEET_ID, 
-                settings.GOOGLE_SHEET_NAME,
-                prospect_name=prospect_dict['name'],
-                stage=stage
-            )
-            send_count += 1
+            # Add to our list for bulk update
+            successful_sends.append((recipient, stage))
             time.sleep(5) # Respectful delay between sends
 
-    logging.info(f"Successfully sent {send_count} follow-up emails.")
+    # --- Bulk Update Google Sheet ---
+    if successful_sends:
+        logging.info(f"Updating status for {len(successful_sends)} successfully sent follow-ups...")
+        google_sheets_helpers.update_follow_up_status(
+            service,
+            settings.SPREADSHEET_ID,
+            settings.GOOGLE_SHEET_NAME,
+            prospect_updates=successful_sends
+        )
+
+    logging.info(f"Successfully sent {len(successful_sends)} follow-up emails.")
     logging.info("--- FOLLOW-UP CAMPAIGN COMPLETE ---")
 
 

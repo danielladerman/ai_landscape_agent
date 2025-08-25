@@ -5,6 +5,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from config.config import settings
+from datetime import datetime, timedelta
 
 # --- Logging Setup ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -13,6 +14,51 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # This new scope allows reading, composing, and sending emails.
 # If you change this, you MUST delete the token.json file to re-authenticate.
 SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
+
+def _execute_gmail_query(service, query):
+    """A helper to execute a query and return the message count."""
+    try:
+        result = service.users().messages().list(userId='me', q=query).execute()
+        return result.get('resultSizeEstimate', 0)
+    except Exception as e:
+        logging.error(f"🔴 Error executing Gmail query '{query}': {e}")
+        return 0
+
+def get_email_stats():
+    """
+    Fetches key email statistics for the last 24 hours.
+    """
+    service = get_gmail_service()
+    if not service:
+        return {
+            "emails_sent": "Error",
+            "replies_received": "Error",
+            "bounces": "Error"
+        }
+
+    # Define the time window for the last 24 hours
+    yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y/%m/%d')
+    query_base = f'after:{yesterday}'
+
+    # --- Build Queries ---
+    # Emails sent from the user's account
+    sent_query = f'{query_base} from:me'
+    # Replies are harder to track, but we can look for common indicators
+    # Note: This is an approximation.
+    reply_query = f'{query_base} to:me (subject:"Re:" OR in:inbox)'
+    # Bounce query from the bounce processing script
+    bounce_query = f'{query_base} subject:("Delivery Status Notification (Failure)" OR "Undelivered Mail Returned to Sender" OR "Undeliverable") OR from:mailer-daemon@google.com'
+
+    # --- Fetch Stats ---
+    emails_sent = _execute_gmail_query(service, sent_query)
+    replies_received = _execute_gmail_query(service, reply_query)
+    bounces = _execute_gmail_query(service, bounce_query)
+
+    return {
+        "emails_sent_24h": emails_sent,
+        "replies_received_24h": replies_received,
+        "bounces_24h": bounces
+    }
 
 def get_gmail_service():
     """
