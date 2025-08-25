@@ -80,7 +80,7 @@ def run_script_in_thread(script_name: str, args: list = []):
     
     try:
         script_path = os.path.join(project_root, f"{script_name}.py")
-        command = ["python3", script_path] + args
+        command = ["python3", "-u", script_path] + args
         logger.info(f"Starting script with command: {' '.join(command)} (cwd={project_root})")
         
         process = subprocess.Popen(
