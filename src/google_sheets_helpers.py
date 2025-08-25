@@ -11,6 +11,8 @@ from config.config import settings
 
 # --- Setup ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Suppress noisy cache info from googleapiclient
+logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
 
 # --- Service Authentication ---
 
@@ -58,14 +60,18 @@ def get_sheet_as_df(service, spreadsheet_id, sheet_name):
         # This prevents crashes if the sheet has inconsistent row lengths.
         num_columns = len(header)
         cleaned_data = []
-        for i, row in enumerate(data):
+        corrected_count = 0
+        for row in data:
             if len(row) != num_columns:
-                # Pad rows that are too short
+                corrected_count += 1
+                # Pad rows that are too short; truncate rows that are too long
                 padded_row = row + [''] * (num_columns - len(row))
-                cleaned_data.append(padded_row[:num_columns]) # Truncate rows that are too long
-                logging.warning(f"Corrected inconsistent column count in row {i+2}. Expected {num_columns}, found {len(row)}.")
+                cleaned_data.append(padded_row[:num_columns])
             else:
                 cleaned_data.append(row)
+
+        if corrected_count > 0:
+            logging.warning(f"Corrected {corrected_count} rows with inconsistent column counts to match header length ({num_columns}).")
 
         return pd.DataFrame(cleaned_data, columns=header)
     except Exception as e:
