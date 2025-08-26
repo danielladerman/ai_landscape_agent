@@ -30,14 +30,8 @@ API_KEY_NAME = "X-API-KEY"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 security = HTTPBasic()
 
-async def get_api_key(api_key: str = Depends(api_key_header)):
-    """Dependency to validate the API key."""
-    if not api_key or api_key != settings.WEB_API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Could not validate credentials"
-        )
-    return api_key
+# This is no longer needed as we are moving to endpoint-specific auth
+# async def get_api_key...
 
 def check_auth(credentials: HTTPBasicCredentials = Depends(security)):
     """Dependency to check for basic authentication credentials."""
@@ -132,8 +126,8 @@ def run_script_in_thread(script_name: str, args: list = []):
 
 # --- FastAPI Routes ---
 @app.get("/", response_class=HTMLResponse)
-async def read_root(request: Request, username: str = Depends(check_auth)):
-    """Serves the main control panel HTML page, protected by basic auth."""
+async def read_root(request: Request):
+    """Serves the main control panel HTML page. Publicly accessible."""
     return templates.TemplateResponse("index.html", {"request": request, "api_key": settings.WEB_API_KEY})
 
 @app.post("/run-script/{script_name}")
@@ -142,9 +136,10 @@ async def run_script_endpoint(script_name: str,
                               max_leads: int = Form(None),
                               max_emails: int = Form(None),
                               limit: int = Form(None),
-                              api_key: str = Depends(get_api_key)):
+                              username: str = Depends(check_auth)):
     """
     Endpoint to trigger a script. Runs it in a background thread to avoid blocking.
+    Protected by Basic Authentication.
     """
     if script_name not in process_status:
         return JSONResponse(status_code=404, content={"message": "Script not found"})
@@ -176,19 +171,20 @@ async def run_script_endpoint(script_name: str,
     return JSONResponse(status_code=202, content={"message": f"Script '{script_name}' started."})
 
 @app.get("/status")
-async def get_status():
-    """Endpoint to fetch the current status of all scripts."""
+async def get_status(username: str = Depends(check_auth)):
+    """Endpoint to fetch the current status of all scripts. Protected."""
     return JSONResponse(content=process_status)
 
 @app.get("/logs")
-async def get_logs():
-    """Endpoint to fetch the latest logs for the frontend."""
+async def get_logs(username: str = Depends(check_auth)):
+    """Endpoint to fetch the latest logs for the frontend. Protected."""
     return JSONResponse(content={"logs": list(log_buffer)})
 
 @app.get("/dashboard-data")
-async def get_dashboard_data(api_key: str = Depends(get_api_key)):
+async def get_dashboard_data(username: str = Depends(check_auth)):
     """
     Endpoint to fetch aggregated data for the dashboard from Google Sheets.
+    Protected by Basic Authentication.
     """
     # --- Fetch Google Sheets Data ---
     g_sheets_service = google_sheets_helpers.get_google_sheets_service()

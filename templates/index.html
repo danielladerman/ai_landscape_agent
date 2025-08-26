@@ -471,19 +471,29 @@
 
                     const formData = new FormData(form);
                     
+                    // The API key header is no longer needed
                     try {
                         const response = await fetch(`/run-script/${scriptName}`, {
                             method: 'POST',
-                            headers: {
-                                'X-API-KEY': this.apiKey
-                            },
                             body: formData
                         });
                         
+                        if (response.status === 401) {
+                            // This will trigger the browser's auth prompt.
+                            // After successful auth, the next poll will succeed.
+                            alert("Authentication required. Please enter your credentials.");
+                            return;
+                        }
+
                         if (response.status === 202) {
                             // Immediately update UI for responsiveness
                             this.state.statuses[scriptName] = { status: 'running' };
                             this.updateUI();
+                            
+                            // If this was the first action, start polling now
+                            if (!this.pollingInterval) {
+                                this.startPolling();
+                            }
                         } else {
                             const errorData = await response.json();
                             alert(`Error: ${errorData.message}`);
@@ -497,12 +507,21 @@
                 startPolling() {
                     const fetchData = async () => {
                         try {
+                            // The API key is no longer needed for GET requests with Basic Auth
                             const [statusRes, logsRes, dashboardRes] = await Promise.all([
                                 fetch('/status'),
                                 fetch('/logs'),
-                                fetch('/dashboard-data', { headers: { 'X-API-KEY': this.apiKey } })
+                                fetch('/dashboard-data')
                             ]);
                             
+                            // Check if any request requires authentication
+                            if ([statusRes, logsRes, dashboardRes].some(res => res.status === 401)) {
+                                this.renderLoggedOutState();
+                                // Browser will automatically show login prompt.
+                                // No need to setInterval again until a successful login happens.
+                                return;
+                            }
+
                             this.state.statuses = await statusRes.json();
                             this.state.logs = (await logsRes.json()).logs;
                             this.state.dashboardData = await dashboardRes.json();
@@ -510,14 +529,34 @@
                             this.updateUI();
                             this.renderLogs();
                             this.renderDashboard();
+                            
+                            // Only continue polling if the first fetch was successful
+                            if (!this.pollingInterval) {
+                                this.pollingInterval = setInterval(fetchData, 5000);
+                            }
 
                         } catch (error) {
                             console.error('Polling error:', error);
+                            this.renderLoggedOutState();
                         }
                     };
                     
                     fetchData(); // Initial call
-                    setInterval(fetchData, 5000); // Poll every 5 seconds
+                },
+
+                renderLoggedOutState() {
+                    this.elements.dashboardSection.innerHTML = `
+                        <div class="stat-card" style="grid-column: 1 / -1; text-align: center;">
+                            <h3>Authentication Required</h3>
+                            <div class="stat-details">Please click a command button and enter your credentials to view live stats and logs.</div>
+                        </div>
+                    `;
+                    this.elements.logContainer.innerHTML = '<div class="log-line">Please authenticate to see live logs.</div>';
+                    // Disable all buttons until authenticated
+                    this.elements.forms.forEach(form => {
+                        const button = form.querySelector('button[type="submit"]');
+                        if(button) button.disabled = false; // Re-enable buttons to allow login trigger
+                    });
                 },
 
                 updateUI() {
