@@ -4,6 +4,7 @@ import argparse
 from datetime import datetime, timedelta
 import time
 import json
+import os
 
 from config.config import settings
 from src.email_sending import email_sender
@@ -11,6 +12,7 @@ from src.email_generation import email_generator
 from src import google_sheets_helpers
 
 # --- Logging Setup ---
+os.makedirs("logs", exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
