@@ -126,8 +126,8 @@ def run_script_in_thread(script_name: str, args: list = []):
 
 # --- FastAPI Routes ---
 @app.get("/", response_class=HTMLResponse)
-async def read_root(request: Request):
-    """Serves the main control panel HTML page. Publicly accessible."""
+async def read_root(request: Request, username: str = Depends(check_auth)):
+    """Serves the main control panel HTML page, protected by basic auth."""
     return templates.TemplateResponse("index.html", {"request": request, "api_key": settings.WEB_API_KEY})
 
 @app.post("/run-script/{script_name}")
