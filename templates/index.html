@@ -471,10 +471,10 @@
 
                     const formData = new FormData(form);
                     
-                    // The API key header is no longer needed
                     try {
                         const response = await fetch(`/run-script/${scriptName}`, {
                             method: 'POST',
+                            // No headers needed, the browser handles Basic Auth automatically
                             body: formData
                         });
                         
