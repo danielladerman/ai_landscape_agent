@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = Field(..., description="API key for OpenAI services.")
     GOOGLE_MAPS_API_KEY: str = Field(..., description="API key for Google Maps Places API.")
     WEB_API_KEY: str = Field("your_secret_api_key", description="A secret key to protect web endpoints.")
+    ADMIN_USERNAME: str = Field(..., description="The username for basic authentication.")
+    ADMIN_PASSWORD: str = Field(..., description="The password for basic authentication.")
 
     # --- Google Sheets Configuration (Required) ---
     SPREADSHEET_ID: str = Field(..., description="The ID of the Google Sheet for tracking prospects.")

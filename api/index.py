@@ -12,20 +12,23 @@ from fastapi import FastAPI, Request, Form, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
+from fastapi.security import APIKeyHeader, HTTPBasic, HTTPBasicCredentials
 import subprocess
 import threading
 import logging
 from collections import deque
 from datetime import datetime
 from src import google_sheets_helpers
+from src import gmail_helpers
 from config.config import settings
 import base64
-from fastapi.security import APIKeyHeader
+import secrets
 import numpy as np
 
 # --- Security ---
 API_KEY_NAME = "X-API-KEY"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+security = HTTPBasic()
 
 async def get_api_key(api_key: str = Depends(api_key_header)):
     """Dependency to validate the API key."""
@@ -35,6 +38,18 @@ async def get_api_key(api_key: str = Depends(api_key_header)):
             detail="Could not validate credentials"
         )
     return api_key
+
+def check_auth(credentials: HTTPBasicCredentials = Depends(security)):
+    """Dependency to check for basic authentication credentials."""
+    correct_username = secrets.compare_digest(credentials.username, settings.ADMIN_USERNAME)
+    correct_password = secrets.compare_digest(credentials.password, settings.ADMIN_PASSWORD)
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
 
 # --- Setup ---
 app = FastAPI()
@@ -117,8 +132,8 @@ def run_script_in_thread(script_name: str, args: list = []):
 
 # --- FastAPI Routes ---
 @app.get("/", response_class=HTMLResponse)
-async def read_root(request: Request):
-    """Serves the main control panel HTML page."""
+async def read_root(request: Request, username: str = Depends(check_auth)):
+    """Serves the main control panel HTML page, protected by basic auth."""
     return templates.TemplateResponse("index.html", {"request": request, "api_key": settings.WEB_API_KEY})
 
 @app.post("/run-script/{script_name}")
