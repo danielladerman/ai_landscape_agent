@@ -1,102 +1,39 @@
-import uvicorn
-import sys
 import os
-
-# Add the project root to the Python path. This is required for the API server
-# to find the `src` module when running from the `api/` directory.
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-from fastapi import FastAPI, Request, Form, Depends, HTTPException, status
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
-from fastapi.security import APIKeyHeader, HTTPBasic, HTTPBasicCredentials
-import subprocess
-import threading
 import logging
 from collections import deque
-from datetime import datetime
-from src import google_sheets_helpers
-from src import gmail_helpers
-from config.config import settings
-import base64
+import threading
+import subprocess
+import time
+from fastapi import FastAPI, Request, Depends, HTTPException, Form
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import secrets
 import numpy as np
-import json
 
-# --- Security ---
-API_KEY_NAME = "X-API-KEY"
-api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
-security = HTTPBasic()
+from config.config import settings
 
-# This is no longer needed as we are moving to endpoint-specific auth
-# async def get_api_key...
+# --- Logging Setup ---
+# A deque is a thread-safe, memory-efficient list-like object
+log_buffer = deque(maxlen=300) 
 
-def check_auth(credentials: HTTPBasicCredentials = Depends(security)):
-    """Dependency to check for basic authentication credentials."""
-    correct_username = secrets.compare_digest(credentials.username, settings.ADMIN_USERNAME)
-    correct_password = secrets.compare_digest(credentials.password, settings.ADMIN_PASSWORD)
-    if not (correct_username and correct_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    return credentials.username
-
-# --- Job Queue ---
-QUEUE_FILE = os.path.join(settings.BASE_DIR, "job_queue.json")
-
-def add_job_to_queue(job: dict):
-    """Adds a new job to the file-based queue."""
-    try:
-        # Read existing jobs
-        if os.path.exists(QUEUE_FILE) and os.path.getsize(QUEUE_FILE) > 0:
-            with open(QUEUE_FILE, 'r') as f:
-                jobs = json.load(f)
-        else:
-            jobs = []
-        
-        # Add the new job and write back
-        jobs.append(job)
-        with open(QUEUE_FILE, 'w') as f:
-            json.dump(jobs, f, indent=4)
-        
-        return True
-    except Exception as e:
-        logging.error(f"Failed to add job to queue: {e}")
-        return False
-
-# --- Setup ---
-app = FastAPI()
-
-# Adjust paths for Vercel deployment
-# The templates directory is now one level up from the 'api' directory
-templates_dir = os.path.join(os.path.dirname(__file__), '..', 'templates')
-app.mount("/static", StaticFiles(directory=templates_dir), name="static")
-templates = Jinja2Templates(directory=templates_dir)
-
-log_buffer = deque(maxlen=300) # Store the last 300 log lines
-
-# --- Logging ---
-# A custom handler to route logs to our in-memory buffer
-class DequeLogHandler(logging.Handler):
+class DequeHandler(logging.Handler):
     def emit(self, record):
-        log_entry = self.format(record)
-        log_buffer.append(log_entry)
+        log_buffer.append(self.format(record))
 
-# Configure the root logger to use our handler
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-# Add our custom handler
-logging.getLogger().addHandler(DequeLogHandler())
-
+# Configure root logger
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        DequeHandler(),
+        logging.StreamHandler() # Also print to console
+    ]
+)
 
 # --- State Management ---
-# Track the status of each script: idle, queued, success, error
-# Note: We can no longer reliably track 'running' status as the worker is a separate process.
-# The UI will prevent double-clicks, and the log file is the source of truth.
+# Track the status of each script: idle, running, success, error
 process_status = {
     "build_prospect_list": {"status": "idle"},
     "run_daily_sending": {"status": "idle"},
@@ -104,56 +41,77 @@ process_status = {
     "process_bounces": {"status": "idle"}
 }
 
-# --- Helper Functions ---
-def run_script_in_thread(script_name: str, args: list = []):
+# --- Dependencies ---
+templates = Jinja2Templates(directory="templates")
+security = HTTPBasic()
+
+# --- Security ---
+def check_auth(credentials: HTTPBasicCredentials = Depends(security)):
+    """Checks for correct username and password."""
+    correct_username = secrets.compare_digest(credentials.username, settings.ADMIN_USERNAME)
+    correct_password = secrets.compare_digest(credentials.password, settings.ADMIN_PASSWORD)
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
+# --- Script Execution Logic ---
+def get_project_root():
+    """Helper function to get the project's root directory."""
+    return os.path.abspath(os.path.dirname(__file__))
+
+def run_script_in_thread(script_name: str, args: list):
     """
-    Target function for threads. Runs a script and captures its output.
+    Runs a script in a background thread using subprocess, streaming its output to the log buffer.
     """
-    logger = logging.getLogger(script_name)
     process_status[script_name]["status"] = "running"
+    logging.info(f"Starting script with command: python3 -u {script_name}.py {' '.join(args)}")
     
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    command = ["python3", "-u", os.path.join(project_root, f"{script_name}.py")] + args
+
     try:
-        script_path = os.path.join(project_root, f"{script_name}.py")
-        command = ["python3", "-u", script_path] + args
-        logger.info(f"Starting script with command: {' '.join(command)} (cwd={project_root})")
-        
         process = subprocess.Popen(
             command,
-            cwd=project_root,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
-            universal_newlines=True
+            universal_newlines=True,
+            cwd=project_root
         )
-        process_status[script_name]["pid"] = process.pid
 
-        # Stream output to the logger in real-time
+        # Stream stdout line by line
         for line in iter(process.stdout.readline, ''):
-            logger.info(line.strip())
+            logging.info(line.strip())
         
         process.stdout.close()
-        return_code = process.wait()
-        
+        return_code = process.wait() # Wait for the process to complete
+
         if return_code == 0:
             process_status[script_name]["status"] = "success"
-            logger.info(f"Script finished successfully.")
+            logging.info(f"Script '{script_name}' finished successfully.")
         else:
             process_status[script_name]["status"] = "error"
-            logger.error(f"Script failed with return code {return_code}.")
-            
+            logging.error(f"Script '{script_name}' failed with return code {return_code}.")
+
     except Exception as e:
         process_status[script_name]["status"] = "error"
-        logger.error(f"An exception occurred while running the script: {e}", exc_info=True)
-    finally:
-        process_status[script_name]["pid"] = None
+        logging.error(f"An exception occurred while running script '{script_name}': {e}", exc_info=True)
 
 
-# --- FastAPI Routes ---
+# --- Setup ---
+app = FastAPI()
+
+app.mount("/static", StaticFiles(directory="templates"), name="static")
+
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, username: str = Depends(check_auth)):
     """Serves the main control panel HTML page, protected by basic auth."""
-    return templates.TemplateResponse("index.html", {"request": request, "api_key": settings.WEB_API_KEY})
+    return templates.TemplateResponse("index.html", {"request": request})
 
 @app.post("/run-script/{script_name}")
 async def run_script_endpoint(script_name: str, 
@@ -163,15 +121,15 @@ async def run_script_endpoint(script_name: str,
                               limit: int = Form(None),
                               username: str = Depends(check_auth)):
     """
-    Endpoint to add a script execution job to the queue.
+    Endpoint to trigger a script. Runs it in a background thread to avoid blocking.
     Protected by Basic Authentication.
     """
     if script_name not in process_status:
         return JSONResponse(status_code=404, content={"message": "Script not found"})
+        
+    if process_status[script_name]["status"] == "running":
+        return JSONResponse(status_code=409, content={"message": "Process is already running"})
 
-    # The UI will prevent rapid re-clicks. On the backend, we just queue the job.
-    # We set a simple "queued" status for immediate UI feedback.
-    
     args = []
     if script_name == "build_prospect_list":
         if not query or max_leads is None:
@@ -186,66 +144,37 @@ async def run_script_endpoint(script_name: str,
             return JSONResponse(status_code=400, content={"message": "Missing required parameters for run_follow_ups"})
         args.append(f"--limit={limit}")
 
-    job = {"script_name": script_name, "args": args}
+    # Reset status before starting
+    process_status[script_name]["status"] = "idle"
+
+    thread = threading.Thread(target=run_script_in_thread, args=(script_name, args))
+    thread.daemon = True
+    thread.start()
     
-    if add_job_to_queue(job):
-        # We can't know the real status, but this provides immediate feedback
-        process_status[script_name]["status"] = "queued" 
-        return JSONResponse(status_code=202, content={"message": f"Job '{script_name}' has been queued."})
-    else:
-        return JSONResponse(status_code=500, content={"message": "Failed to queue the job."})
+    return JSONResponse(status_code=202, content={"message": f"Script '{script_name}' started."})
 
 @app.get("/status")
 async def get_status(username: str = Depends(check_auth)):
-    """
-    Endpoint to get the last known status of scripts.
-    'queued' status is reset to 'idle' on the next poll to allow re-triggering.
-    """
-    # Create a copy to avoid modifying the original dict while iterating
-    current_status = process_status.copy()
-    
-    # After reporting a "queued" status once, reset it to "idle" so the user can
-    # trigger the script again if they want to. The log file is the true record.
-    for script_name, status_info in process_status.items():
-        if status_info["status"] == "queued":
-            process_status[script_name]["status"] = "idle" # Reset for next poll
-
-    return JSONResponse(content=current_status)
+    """Endpoint to fetch the current status of all scripts. Protected."""
+    return JSONResponse(content=process_status)
 
 @app.get("/logs")
 async def get_logs(username: str = Depends(check_auth)):
-    """Endpoint to fetch the latest logs from the worker log file for the frontend."""
-    log_file_path = os.path.join(settings.BASE_DIR, "logs", "worker.log")
-    try:
-        if os.path.exists(log_file_path):
-            with open(log_file_path, 'r') as f:
-                # Use deque to efficiently get the last N lines
-                lines = deque(f, maxlen=300)
-                return JSONResponse(content={"logs": list(lines)})
-        else:
-            return JSONResponse(content={"logs": ["Worker log file not found."]})
-    except Exception as e:
-        return JSONResponse(content={"logs": [f"Error reading log file: {e}"]})
+    """Endpoint to fetch the latest logs for the frontend. Protected."""
+    return JSONResponse(content={"logs": list(log_buffer)})
 
 @app.get("/dashboard-data")
 async def get_dashboard_data(username: str = Depends(check_auth)):
     """
-    Endpoint to fetch aggregated data for the dashboard from Google Sheets.
-    Protected by Basic Authentication.
+    Endpoint to get summary statistics for the dashboard. Protected.
     """
-    # --- Fetch Google Sheets Data ---
-    g_sheets_service = google_sheets_helpers.get_google_sheets_service()
-    if not g_sheets_service:
-        raise HTTPException(status_code=500, detail="Failed to connect to Google Sheets API.")
+    from src.google_sheets_helpers import get_sheet_summary_stats
     
-    sheet_stats = google_sheets_helpers.get_sheet_summary_stats(
-        g_sheets_service, 
-        settings.SPREADSHEET_ID, 
-        settings.GOOGLE_SHEET_NAME
-    )
-
-    # --- Combine and Return ---
-    dashboard_data = dict(sheet_stats)
+    dashboard_data = get_sheet_summary_stats()
+    
+    if dashboard_data.get("error"):
+        logging.error(f"Error fetching dashboard data: {dashboard_data['error']}")
+        return JSONResponse(status_code=500, content=dashboard_data)
 
     # Convert numpy int64 types to standard Python int for JSON serialization
     for key, value in dashboard_data.items():
@@ -255,9 +184,7 @@ async def get_dashboard_data(username: str = Depends(check_auth)):
                     value[inner_key] = int(inner_value)
         if isinstance(value, np.int64):
             dashboard_data[key] = int(value)
-    
+            
     return JSONResponse(content=dashboard_data)
 
-if __name__ == "__main__":
-    print("Starting web server for local development at http://127.0.0.1:8000")
-    uvicorn.run("index:app", host="127.0.0.1", port=8000, reload=True)
+# To run locally: uvicorn api.index:app --reload

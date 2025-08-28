@@ -564,11 +564,12 @@
                         this.elements.masterStatus.dataset.status = 'running';
                         this.elements.masterStatus.textContent = 'System Active';
                     } else {
-                        const isAnyScriptQueued = Object.values(this.state.statuses).some(s => s.status === 'queued');
-                        if (isAnyScriptQueued) {
-                            this.elements.masterStatus.dataset.status = 'running'; // Use 'running' color for queued
-                            this.elements.masterStatus.textContent = 'Task Queued...';
-                        } else if (lastCompletedStatus === 'error') {
+                        // Check if the MOST RECENTLY completed script ended in error
+                        const lastCompletedStatus = Object.values(this.state.statuses)
+                            .map(s => s.status)
+                            .find(status => status === 'success' || status === 'error');
+
+                        if (lastCompletedStatus === 'error') {
                             this.elements.masterStatus.dataset.status = 'error';
                             this.elements.masterStatus.textContent = 'System Error';
                         } else {
