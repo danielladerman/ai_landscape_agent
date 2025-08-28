@@ -24,6 +24,7 @@ from config.config import settings
 import base64
 import secrets
 import numpy as np
+import json
 
 # --- Security ---
 API_KEY_NAME = "X-API-KEY"
@@ -44,6 +45,29 @@ def check_auth(credentials: HTTPBasicCredentials = Depends(security)):
             headers={"WWW-Authenticate": "Basic"},
         )
     return credentials.username
+
+# --- Job Queue ---
+QUEUE_FILE = os.path.join(settings.BASE_DIR, "job_queue.json")
+
+def add_job_to_queue(job: dict):
+    """Adds a new job to the file-based queue."""
+    try:
+        # Read existing jobs
+        if os.path.exists(QUEUE_FILE) and os.path.getsize(QUEUE_FILE) > 0:
+            with open(QUEUE_FILE, 'r') as f:
+                jobs = json.load(f)
+        else:
+            jobs = []
+        
+        # Add the new job and write back
+        jobs.append(job)
+        with open(QUEUE_FILE, 'w') as f:
+            json.dump(jobs, f, indent=4)
+        
+        return True
+    except Exception as e:
+        logging.error(f"Failed to add job to queue: {e}")
+        return False
 
 # --- Setup ---
 app = FastAPI()
@@ -138,15 +162,15 @@ async def run_script_endpoint(script_name: str,
                               limit: int = Form(None),
                               username: str = Depends(check_auth)):
     """
-    Endpoint to trigger a script. Runs it in a background thread to avoid blocking.
+    Endpoint to add a script execution job to the queue.
     Protected by Basic Authentication.
     """
     if script_name not in process_status:
         return JSONResponse(status_code=404, content={"message": "Script not found"})
-        
-    if process_status[script_name]["status"] == "running":
-        return JSONResponse(status_code=409, content={"message": "Process is already running"})
 
+    # Note: We can no longer check 'running' status here as the worker is separate.
+    # The UI will still prevent double-clicks, which is sufficient for now.
+    
     args = []
     if script_name == "build_prospect_list":
         if not query or max_leads is None:
@@ -161,14 +185,14 @@ async def run_script_endpoint(script_name: str,
             return JSONResponse(status_code=400, content={"message": "Missing required parameters for run_follow_ups"})
         args.append(f"--limit={limit}")
 
-    # Reset status before starting
-    process_status[script_name]["status"] = "idle"
-
-    thread = threading.Thread(target=run_script_in_thread, args=(script_name, args))
-    thread.daemon = True # Allows main thread to exit even if background threads are running
-    thread.start()
+    job = {"script_name": script_name, "args": args}
     
-    return JSONResponse(status_code=202, content={"message": f"Script '{script_name}' started."})
+    if add_job_to_queue(job):
+        # We can't know the real status, but this provides immediate feedback
+        process_status[script_name]["status"] = "queued" 
+        return JSONResponse(status_code=202, content={"message": f"Job '{script_name}' has been queued."})
+    else:
+        return JSONResponse(status_code=500, content={"message": "Failed to queue the job."})
 
 @app.get("/status")
 async def get_status(username: str = Depends(check_auth)):
@@ -177,8 +201,18 @@ async def get_status(username: str = Depends(check_auth)):
 
 @app.get("/logs")
 async def get_logs(username: str = Depends(check_auth)):
-    """Endpoint to fetch the latest logs for the frontend. Protected."""
-    return JSONResponse(content={"logs": list(log_buffer)})
+    """Endpoint to fetch the latest logs from the worker log file for the frontend."""
+    log_file_path = os.path.join(settings.BASE_DIR, "logs", "worker.log")
+    try:
+        if os.path.exists(log_file_path):
+            with open(log_file_path, 'r') as f:
+                # Use deque to efficiently get the last N lines
+                lines = deque(f, maxlen=300)
+                return JSONResponse(content={"logs": list(lines)})
+        else:
+            return JSONResponse(content={"logs": ["Worker log file not found."]})
+    except Exception as e:
+        return JSONResponse(content={"logs": [f"Error reading log file: {e}"]})
 
 @app.get("/dashboard-data")
 async def get_dashboard_data(username: str = Depends(check_auth)):

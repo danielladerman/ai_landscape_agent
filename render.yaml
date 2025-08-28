@@ -16,3 +16,32 @@ services:
         sync: false
       - key: SPREADSHEET_ID
         sync: false
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+
+  - type: worker
+    name: landscape-ai-worker
+    env: python
+    buildCommand: "pip install -U pip && pip install -r requirements.txt"
+    startCommand: "python3 worker.py"
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: OPENAI_API_KEY
+        fromService:
+          type: web
+          name: landscape-ai-agent
+          envVarKey: OPENAI_API_KEY
+      - key: GOOGLE_MAPS_API_KEY
+        fromService:
+          type: web
+          name: landscape-ai-agent
+          envVarKey: GOOGLE_MAPS_API_KEY
+      - key: SPREADSHEET_ID
+        fromService:
+          type: web
+          name: landscape-ai-agent
+          envVarKey: SPREADSHEET_ID

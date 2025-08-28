@@ -479,7 +479,7 @@
                         
                         if (response.status === 202) {
                             // Immediately update UI for responsiveness
-                            this.state.statuses[scriptName] = { status: 'running' };
+                            this.state.statuses[scriptName] = { status: 'queued' };
                             this.updateUI();
                         } else {
                             const errorData = await response.json();
@@ -535,11 +535,13 @@
                         const button = card.querySelector('button[type="submit"]');
                         if(button) {
                             const buttonTextSpan = button.querySelector('span');
-                            button.disabled = (status === 'running');
+                            button.disabled = (status === 'running' || status === 'queued');
                             
                             if (buttonTextSpan) {
                                 if (status === 'running') {
                                     buttonTextSpan.textContent = 'Running...';
+                                } else if (status === 'queued') {
+                                    buttonTextSpan.textContent = 'Queued...';
                                 } else if (status === 'success') {
                                     buttonTextSpan.textContent = 'Run Again';
                                 } else {
@@ -548,6 +550,7 @@
                             } else {
                                 // For utility buttons without spans
                                 if (status === 'running') button.textContent = 'Running...';
+                                else if (status === 'queued') button.textContent = 'Queued...';
                                 else button.textContent = this.getInitialButtonText(scriptName);
                             }
                         }
@@ -561,13 +564,17 @@
                         this.elements.masterStatus.dataset.status = 'running';
                         this.elements.masterStatus.textContent = 'System Active';
                     } else {
-                         if(lastCompletedStatus === 'error'){
+                        const isAnyScriptQueued = Object.values(this.state.statuses).some(s => s.status === 'queued');
+                        if (isAnyScriptQueued) {
+                            this.elements.masterStatus.dataset.status = 'running'; // Use 'running' color for queued
+                            this.elements.masterStatus.textContent = 'Task Queued...';
+                        } else if (lastCompletedStatus === 'error') {
                             this.elements.masterStatus.dataset.status = 'error';
                             this.elements.masterStatus.textContent = 'System Error';
-                         } else {
-                             this.elements.masterStatus.dataset.status = 'idle';
+                        } else {
+                            this.elements.masterStatus.dataset.status = 'idle';
                             this.elements.masterStatus.textContent = 'System Idle';
-                         }
+                        }
                     }
                 },
                 
