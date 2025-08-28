@@ -141,3 +141,4 @@ wcwidth==0.2.13
 websockets==11.0.3
 yarl==1.9.4
 zipp==3.18.1
+gunicorn==22.0.0
