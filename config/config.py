@@ -53,12 +53,22 @@ class Settings(BaseSettings):
     GOOGLE_SHEET_NAME: str = "Sheet2"
 
     # --- File Paths ---
-    # These paths are derived from the project's base directory.
+    # These paths are derived from the project's base directory but can be
+    # overridden by environment variables, which is crucial for deployment.
     BASE_DIR: str = BASE_DIR
     PROSPECTS_DATA_PATH: str = os.path.join(BASE_DIR, 'data', 'master_prospect_list.csv')
-    GOOGLE_CREDENTIALS_PATH: str = os.path.join(BASE_DIR, 'config', 'google_credentials.json')
-    GMAIL_API_CREDENTIALS_PATH: str = os.path.join(BASE_DIR, 'config', 'credentials.json')
-    GMAIL_API_TOKEN_PATH: str = os.path.join(BASE_DIR, 'config', 'token.json')
+    GOOGLE_CREDENTIALS_PATH: str = os.getenv(
+        "GOOGLE_CREDENTIALS_PATH",
+        os.path.join(BASE_DIR, 'config', 'google_credentials.json')
+    )
+    GMAIL_API_CREDENTIALS_PATH: str = os.getenv(
+        "GMAIL_API_CREDENTIALS_PATH",
+        os.path.join(BASE_DIR, 'config', 'credentials.json')
+    )
+    GMAIL_API_TOKEN_PATH: str = os.getenv(
+        "GMAIL_API_TOKEN_PATH",
+        os.path.join(BASE_DIR, 'config', 'token.json')
+    )
 
     # --- Optional & Defaulted Settings ---
     # These settings have sensible defaults but can be overridden via the .env file.
