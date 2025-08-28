@@ -168,9 +168,18 @@ async def get_dashboard_data(username: str = Depends(check_auth)):
     """
     Endpoint to get summary statistics for the dashboard. Protected.
     """
-    from src.google_sheets_helpers import get_sheet_summary_stats
+    from src import google_sheets_helpers
+    from config.config import settings
     
-    dashboard_data = get_sheet_summary_stats()
+    service = google_sheets_helpers.get_google_sheets_service()
+    if not service:
+        return JSONResponse(status_code=500, content={"error": "Could not connect to Google Sheets."})
+
+    dashboard_data = google_sheets_helpers.get_sheet_summary_stats(
+        service,
+        settings.SPREADSHEET_ID,
+        settings.GOOGLE_SHEET_NAME
+    )
     
     if dashboard_data.get("error"):
         logging.error(f"Error fetching dashboard data: {dashboard_data['error']}")
