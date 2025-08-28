@@ -94,13 +94,14 @@ logging.getLogger().addHandler(DequeLogHandler())
 
 
 # --- State Management ---
-# Track the status of each script: idle, running, success, error
+# Track the status of each script: idle, queued, success, error
+# Note: We can no longer reliably track 'running' status as the worker is a separate process.
+# The UI will prevent double-clicks, and the log file is the source of truth.
 process_status = {
-    "build_prospect_list": {"status": "idle", "pid": None},
-    "run_daily_sending": {"status": "idle", "pid": None},
-    "run_follow_ups": {"status": "idle", "pid": None},
-    "process_bounces": {"status": "idle", "pid": None},
-    "deduplicate_sheet": {"status": "idle", "pid": None}
+    "build_prospect_list": {"status": "idle"},
+    "run_daily_sending": {"status": "idle"},
+    "run_follow_ups": {"status": "idle"},
+    "process_bounces": {"status": "idle"}
 }
 
 # --- Helper Functions ---
@@ -168,8 +169,8 @@ async def run_script_endpoint(script_name: str,
     if script_name not in process_status:
         return JSONResponse(status_code=404, content={"message": "Script not found"})
 
-    # Note: We can no longer check 'running' status here as the worker is separate.
-    # The UI will still prevent double-clicks, which is sufficient for now.
+    # The UI will prevent rapid re-clicks. On the backend, we just queue the job.
+    # We set a simple "queued" status for immediate UI feedback.
     
     args = []
     if script_name == "build_prospect_list":
@@ -196,8 +197,20 @@ async def run_script_endpoint(script_name: str,
 
 @app.get("/status")
 async def get_status(username: str = Depends(check_auth)):
-    """Endpoint to fetch the current status of all scripts. Protected."""
-    return JSONResponse(content=process_status)
+    """
+    Endpoint to get the last known status of scripts.
+    'queued' status is reset to 'idle' on the next poll to allow re-triggering.
+    """
+    # Create a copy to avoid modifying the original dict while iterating
+    current_status = process_status.copy()
+    
+    # After reporting a "queued" status once, reset it to "idle" so the user can
+    # trigger the script again if they want to. The log file is the true record.
+    for script_name, status_info in process_status.items():
+        if status_info["status"] == "queued":
+            process_status[script_name]["status"] = "idle" # Reset for next poll
+
+    return JSONResponse(content=current_status)
 
 @app.get("/logs")
 async def get_logs(username: str = Depends(check_auth)):

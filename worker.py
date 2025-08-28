@@ -64,31 +64,43 @@ def run_job(job):
     except Exception as e:
         logging.error(f"--- An exception occurred while running job '{script_name}': {e} ---", exc_info=True)
 
-def watch_queue():
-    """Continuously watches the queue file for new jobs."""
-    logging.info("Worker started. Watching for jobs in queue...")
-    while True:
-        jobs_to_run = []
-        try:
-            if os.path.exists(QUEUE_FILE) and os.path.getsize(QUEUE_FILE) > 0:
-                with open(QUEUE_FILE, 'r+') as f:
-                    try:
-                        jobs_to_run = json.load(f)
-                    except json.JSONDecodeError:
-                        jobs_to_run = [] # File might be being written to
+def process_queue_once():
+    """Checks the queue file and processes any jobs found, then exits."""
+    logging.info("Worker started. Checking for jobs in queue...")
+    jobs_to_run = []
+    
+    # --- Read and clear the queue atomically ---
+    try:
+        if os.path.exists(QUEUE_FILE) and os.path.getsize(QUEUE_FILE) > 0:
+            with open(QUEUE_FILE, 'r+') as f:
+                try:
+                    # Lock the file if possible (on Unix-like systems)
+                    import fcntl
+                    fcntl.flock(f, fcntl.LOCK_EX)
+                    
+                    jobs_to_run = json.load(f)
                     
                     # Clear the queue after reading
                     f.seek(0)
                     f.truncate()
-        except Exception as e:
-            logging.error(f"Error reading or clearing queue file: {e}")
+                except (json.JSONDecodeError, ImportError):
+                    # Fallback for non-locking environments or corrupted file
+                    jobs_to_run = []
+                finally:
+                    # Always release the lock
+                    if 'fcntl' in locals():
+                        fcntl.flock(f, fcntl.LOCK_UN)
+    except Exception as e:
+        logging.error(f"Error reading or clearing queue file: {e}")
 
-        if jobs_to_run:
-            for job in jobs_to_run:
-                run_job(job)
-        
-        # Poll every 10 seconds
-        time.sleep(10)
+    # --- Run the jobs ---
+    if jobs_to_run:
+        logging.info(f"Found {len(jobs_to_run)} job(s) in the queue. Executing...")
+        for job in jobs_to_run:
+            run_job(job)
+        logging.info("Finished processing all jobs in the queue.")
+    else:
+        logging.info("No jobs found in the queue.")
 
 if __name__ == "__main__":
-    watch_queue()
+    process_queue_once()
