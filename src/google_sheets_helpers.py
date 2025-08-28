@@ -33,7 +33,7 @@ def get_google_sheets_service():
         logging.error(f"🔴 CRITICAL: Google credentials file not found at '{settings.GOOGLE_CREDENTIALS_PATH}'.")
     except Exception as e:
         logging.error(f"🔴 Error initializing Google Sheets service: {e}")
-    return None
+        return None
 
 # --- Data Retrieval ---
 
@@ -345,8 +345,8 @@ def append_df_to_sheet(service, spreadsheet_id, sheet_name, df_to_append):
     try:
         # Get the existing data from the sheet to determine the last row
         existing_values = service.spreadsheets().values().get(
-            spreadsheetId=spreadsheet_id,
-            range=sheet_name
+                spreadsheetId=spreadsheet_id,
+                range=sheet_name
         ).execute().get('values', [])
 
         body = {
@@ -354,12 +354,12 @@ def append_df_to_sheet(service, spreadsheet_id, sheet_name, df_to_append):
         }
         
         service.spreadsheets().values().append(
-            spreadsheetId=spreadsheet_id,
+                spreadsheetId=spreadsheet_id,
             range=f"{sheet_name}!A{len(existing_values) + 1}",
-            valueInputOption='USER_ENTERED',
+                valueInputOption='USER_ENTERED',
             insertDataOption='INSERT_ROWS',
             body=body
-        ).execute()
+            ).execute()
         logging.info(f"✅ Successfully appended {len(df_to_append)} new rows to the sheet.")
         return True
     except Exception as e:
@@ -396,7 +396,7 @@ def deduplicate_prospects(service, spreadsheet_id, sheet_name):
                 spreadsheetId=spreadsheet_id,
                 range=sheet_name
             ).execute()
-
+            
             # Write the deduplicated DataFrame back to the sheet
             body = {
                 'values': [df.columns.values.tolist()] + df.values.tolist()
